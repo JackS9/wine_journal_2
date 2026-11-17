@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agentic AI Wine Journal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans pb-12">
+
+    <header class="border-b border-slate-800 bg-slate-950 p-4 sticky top-0 z-50">
+        <div class="max-w-4xl mx-auto flex justify-between items-center">
+            <h1 class="text-xl font-bold text-amber-500 tracking-wide flex items-center gap-2">
+                🍷 AI Wine Journal 2.0
+            </h1>
+            <span class="text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2.5 py-1 rounded-full">
+                Agentic Deep-Research
+            </span>
+        </div>
+    </header>
+
+    <main class="max-w-4xl mx-auto p-4 space-y-6">
+
+        <!-- Step 1: Label Scanner Card -->
+        <section class="bg-slate-800/60 border border-slate-700/60 rounded-xl p-6 shadow-xl">
+            <h2 class="text-lg font-semibold text-amber-400 mb-2">1. Snap Wine Label</h2>
+            <p class="text-sm text-slate-400 mb-4">Upload a wine bottle photo. Gemini Vision OCR will identify the label
+                and pull structural metrics from Vivino.</p>
+
+            <form id="uploadForm" class="flex flex-col sm:flex-row gap-4 items-center">
+                <input type="file" id="labelFile" accept="image/*" capture="environment" required
+                    class="block w-full text-sm text-slate-400 file:mr-4 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-amber-500 file:text-slate-950 hover:file:bg-amber-400 cursor-pointer border border-slate-700 rounded-lg bg-slate-900 p-1">
+                <button type="submit" id="scanBtn"
+                    class="w-full sm:w-auto bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-6 py-2.5 rounded-lg transition shrink-0">
+                    Analyze Label
+                </button>
+            </form>
+        </section>
+
+        <!-- Step 2: Extraction & Agent Progress Dashboard -->
+        <section id="agentSection" class="hidden bg-slate-800/60 border border-slate-700/60 rounded-xl p-6 space-y-4">
+            <div class="flex items-center justify-between">
+                <h2 class="text-lg font-semibold text-amber-400">2. Autonomous AI Research Agent</h2>
+                <span id="agentBadge"
+                    class="text-xs bg-blue-500/20 text-blue-400 px-2.5 py-1 rounded-full animate-pulse">Running
+                    Agent...</span>
+            </div>
+
+            <div id="ocrSummary"
+                class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs bg-slate-900/80 p-3 rounded-lg border border-slate-700">
+                <!-- Injected via JS -->
+            </div>
+
+            <div id="statusLog"
+                class="text-xs font-mono bg-slate-950 p-3 rounded-lg border border-slate-800 text-slate-300 space-y-1">
+                <div>⏳ Waiting for stream...</div>
+            </div>
+
+            <div id="researchReportContainer"
+                class="hidden prose prose-invert max-w-none bg-slate-950 p-5 rounded-xl border border-slate-800 text-slate-300 text-sm overflow-x-auto max-h-[500px]">
+                <!-- Injected compiled Markdown report -->
+            </div>
+        </section>
+
+        <!-- Step 3: Personal Tasting Journal Form -->
+        <section id="journalSection" class="hidden bg-slate-800/60 border border-slate-700/60 rounded-xl p-6 space-y-4">
+            <h2 class="text-lg font-semibold text-amber-400">3. Log Your Personal Tasting Memory</h2>
+
+            <form id="tastingForm" class="space-y-4">
+                <input type="hidden" id="vintageIdInput">
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-400 mb-1">Venue / Location</label>
+                        <input type="text" id="locationInput" placeholder="e.g., Home, Osteria del Wine, Florence"
+                            class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-100">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-400 mb-1">Occasion & Companions</label>
+                        <input type="text" id="occasionInput" placeholder="e.g., Anniversary dinner with Sarah"
+                            class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-100">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-400 mb-1">Rating (1 - 10)</label>
+                        <input type="number" step="0.1" id="ratingInput" min="1" max="10" placeholder="9.2"
+                            class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-100">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-400 mb-1">Price Paid ($)</label>
+                        <input type="number" step="0.01" id="priceInput" placeholder="65.00"
+                            class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-100">
+                    </div>
+                    <div class="col-span-2 sm:col-span-1">
+                        <label class="block text-xs font-medium text-slate-400 mb-1">Palate Tannin (WSET)</label>
+                        <select id="tanninInput"
+                            class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-100">
+                            <option value="medium">Medium</option>
+                            <option value="light">Light</option>
+                            <option value="medium_plus">Medium(+)</option>
+                            <option value="pronounced">High / Pronounced</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-slate-400 mb-1">Tasting Notes</label>
+                    <textarea id="notesInput" rows="3"
+                        placeholder="Aromas of black cherry, tobacco leaf, structured tannins, lingering espresso finish..."
+                        class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-100"></textarea>
+                </div>
+
+                <button type="submit"
+                    class="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-3 rounded-lg transition">
+                    Save Tasting Journal Entry
+                </button>
+            </form>
+        </section>
+
+        <!-- Step 4: Conversational Assistant -->
+        <section id="chatSection" class="hidden bg-slate-800/60 border border-slate-700/60 rounded-xl p-6 space-y-4">
+            <h2 class="text-lg font-semibold text-amber-400">4. Ask Sommelier AI About This Wine</h2>
+
+            <div id="chatHistory"
+                class="bg-slate-950 p-4 rounded-xl border border-slate-800 min-h-[150px] max-h-[300px] overflow-y-auto space-y-3 text-sm">
+                <div class="text-slate-500 italic">Ask me anything about the producer, vintage weather, oak aging, or
+                    food pairing ideas!</div>
+            </div>
+
+            <div class="flex gap-2">
+                <input type="text" id="chatInput"
+                    placeholder="e.g. What food should I pair with this, and what is its aging potential?"
+                    class="flex-1 bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-100">
+                <button id="sendChatBtn"
+                    class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-5 py-2.5 rounded-lg">Ask</button>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        let currentVintageId = null;
+
+        // Handle Label Upload & Analysis
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fileInput = document.getElementById('labelFile');
+            if (!fileInput.files[0]) return;
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            document.getElementById('scanBtn').innerText = 'Scanning Label...';
+            document.getElementById('scanBtn').disabled = true;
+
+            try {
+                const res = await fetch('/api/journal/scan', { method: 'POST', body: formData });
+                const data = await res.json();
+
+                currentVintageId = data.vintage_id;
+                document.getElementById('vintageIdInput').value = currentVintageId;
+
+                // Show Summary
+                const ocr = data.ocr_extracted;
+                document.getElementById('ocrSummary').innerHTML = `
+          <div><span class="text-slate-500">Producer:</span> <br><strong>${ocr.producer}</strong></div>
+          <div><span class="text-slate-500">Wine:</span> <br><strong>${ocr.wine_name}</strong></div>
+          <div><span class="text-slate-500">Vintage:</span> <br><strong>${ocr.vintage || 'NV'}</strong></div>
+          <div><span class="text-slate-500">Region:</span> <br><strong>${ocr.region || 'N/A'}</strong></div>
+        `;
+
+                document.getElementById('agentSection').classList.remove('hidden');
+                document.getElementById('journalSection').classList.remove('hidden');
+                document.getElementById('chatSection').classList.remove('hidden');
+
+                // Trigger SSE Research Agent Stream
+                startAgentResearchStream(currentVintageId);
+
+            } catch (err) {
+                alert('Error parsing label: ' + err.message);
+            } finally {
+                document.getElementById('scanBtn').innerText = 'Analyze Label';
+                document.getElementById('scanBtn').disabled = false;
+            }
+        });
+
+        // Stream SSE Progress
+        function startAgentResearchStream(vintageId) {
+            const logDiv = document.getElementById('statusLog');
+            const eventSource = new EventSource(`/api/journal/research-stream/${vintageId}`);
+
+            eventSource.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+
+                if (data.status === 'started' || data.status === 'agent_running') {
+                    logDiv.innerHTML += `<div>⚙️ ${data.message}</div>`;
+                } else if (data.status === 'completed') {
+                    logDiv.innerHTML += `<div class="text-emerald-400">✅ Research agent finished successfully!</div>`;
+                    document.getElementById('agentBadge').innerText = 'Research Ready';
+                    document.getElementById('agentBadge').className = 'text-xs bg-emerald-500/20 text-emerald-400 px-2.5 py-1 rounded-full';
+
+                    const reportContainer = document.getElementById('researchReportContainer');
+                    reportContainer.innerHTML = marked.parse(data.markdown);
+                    reportContainer.classList.remove('hidden');
+
+                    eventSource.close();
+                }
+            };
+
+            eventSource.onerror = () => {
+                eventSource.close();
+            };
+        }
+
+        // Save Tasting Entry
+        document.getElementById('tastingForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const payload = {
+                vintage_id: parseInt(currentVintageId),
+                location_name: document.getElementById('locationInput').value,
+                occasion: document.getElementById('occasionInput').value,
+                personal_rating: parseFloat(document.getElementById('ratingInput').value) || null,
+                price_paid: parseFloat(document.getElementById('priceInput').value) || null,
+                palate_tannin: document.getElementById('tanninInput').value,
+                user_notes: document.getElementById('notesInput').value
+            };
+
+            const res = await fetch('/api/journal/save-entry', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                alert('🍷 Tasting memory saved to your journal!');
+            }
+        });
+
+        // Chat Assistant
+        document.getElementById('sendChatBtn').addEventListener('click', async () => {
+            const input = document.getElementById('chatInput');
+            const msg = input.value.trim();
+            if (!msg || !currentVintageId) return;
+
+            const history = document.getElementById('chatHistory');
+            history.innerHTML += `<div class="text-amber-400 font-semibold">You: ${msg}</div>`;
+            input.value = '';
+
+            const res = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ vintage_id: currentVintageId, user_message: msg })
+            });
+            const data = await res.json();
+            history.innerHTML += `<div class="text-slate-200 bg-slate-900 p-2.5 rounded-lg border border-slate-800">🍷 <strong>Sommelier AI:</strong> ${data.response}</div>`;
+            history.scrollTop = history.scrollHeight;
+        });
+    </script>
+</body>
+
+</html>
