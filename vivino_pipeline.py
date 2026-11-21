@@ -11,6 +11,11 @@ from pathlib import Path
 import requests
 from bs4 import BeautifulSoup
 from PIL import Image
+try:
+    import pillow_heif
+    pillow_heif.register_heif_opener()
+except ImportError:
+    pass
 from pydantic import BaseModel, Field
 from google import genai
 from google.genai import types
@@ -67,6 +72,8 @@ class LabelVisionAnalyzer:
             raise FileNotFoundError(f"Label image not found at {image_path}")
 
         image = Image.open(path)
+        if image.mode != "RGB":
+            image = image.convert("RGB")
 
         prompt = """
         Examine this wine label image carefully. Extract the key wine details into a structured JSON response.

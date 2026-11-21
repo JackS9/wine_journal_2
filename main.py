@@ -14,6 +14,12 @@ from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv()
 
+try:
+    import pillow_heif
+    pillow_heif.register_heif_opener()
+except ImportError:
+    pass
+
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query, Body
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -133,15 +139,39 @@ async def scan_label_and_initiate_research(file: UploadFile = File(...)):
     or creates DB entities, and returns vintage_id and reuse information.
     """
     # 1. Save uploaded image to disk
-    file_ext = file.filename.split(".")[-1] if "." in file.filename else "jpg"
+    file_bytes = await file.read()
+    raw_ext = (file.filename.split(".")[-1] if "." in file.filename else "jpg").lower()
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    file_path = UPLOAD_DIR / f"label_{timestamp}.{file_ext}"
 
-    with open(file_path, "wb") as buffer:
-        buffer.write(await file.read())
+    # If the uploaded file is HEIC or HEIF, convert to standard JPEG for browser and PIL compatibility
+    is_heif = raw_ext in ["heic", "heif"]
+    save_ext = "jpg" if is_heif else raw_ext
+    file_path = UPLOAD_DIR / f"label_{timestamp}.{save_ext}"
+
+    if is_heif:
+        try:
+            import io
+            from PIL import Image, ImageOps
+            img = Image.open(io.BytesIO(file_bytes))
+            img = ImageOps.exif_transpose(img)
+            if img.mode != "RGB":
+                img = img.convert("RGB")
+            img.save(file_path, "JPEG", quality=92)
+        except Exception as img_err:
+            print(f"HEIC conversion fallback: {img_err}")
+            with open(file_path, "wb") as buffer:
+                buffer.write(file_bytes)
+    else:
+        with open(file_path, "wb") as buffer:
+            buffer.write(file_bytes)
 
     # 2. Run Vision OCR & Vivino pipeline
-    label_info, vivino_data = pipeline.process_image(str(file_path))
+    try:
+        label_info, vivino_data = pipeline.process_image(str(file_path))
+    except Exception as pipe_err:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=400, detail=f"Label processing failed: {str(pipe_err)}")
 
     # 3. Store in Database with Producer Reuse
     db = SessionLocal()

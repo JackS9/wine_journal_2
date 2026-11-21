@@ -964,6 +964,16 @@
 
             try {
                 const res = await fetch('/api/journal/scan', { method: 'POST', body: formData });
+                if (!res.ok) {
+                    let errMsg = 'Failed to analyze label.';
+                    try {
+                        const errJson = await res.json();
+                        errMsg = errJson.detail || errJson.message || JSON.stringify(errJson);
+                    } catch (_) {
+                        errMsg = await res.text();
+                    }
+                    throw new Error(errMsg);
+                }
                 const data = await res.json();
 
                 currentVintageId = data.vintage_id;
