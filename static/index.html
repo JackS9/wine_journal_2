@@ -4,149 +4,953 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Agentic AI Wine Journal</title>
+    <title>AI Wine Journal 2.0</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        .badge-in_window { background-color: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+        .badge-too_young { background-color: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+        .badge-past_peak { background-color: rgba(244, 63, 94, 0.15); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.3); }
+        .badge-unknown { background-color: rgba(148, 163, 184, 0.15); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.3); }
+    </style>
 </head>
 
-<body class="bg-slate-900 text-slate-100 min-h-screen font-sans pb-12">
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans pb-16">
 
-    <header class="border-b border-slate-800 bg-slate-950 p-4 sticky top-0 z-50">
-        <div class="max-w-4xl mx-auto flex justify-between items-center">
-            <h1 class="text-xl font-bold text-amber-500 tracking-wide flex items-center gap-2">
-                🍷 AI Wine Journal 2.0
-            </h1>
-            <span class="text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2.5 py-1 rounded-full">
-                Agentic Deep-Research
-            </span>
+    <!-- Top Navigation Header -->
+    <header class="border-b border-slate-800 bg-slate-900/90 backdrop-blur sticky top-0 z-40">
+        <div class="max-w-6xl mx-auto px-4 py-3.5 flex flex-col sm:flex-row justify-between items-center gap-3">
+            <div class="flex items-center gap-3 cursor-pointer" onclick="switchView('cellar')">
+                <span class="text-2xl">🍷</span>
+                <div>
+                    <h1 class="text-lg font-bold text-amber-500 tracking-wide leading-tight">AI Wine Journal</h1>
+                    <p class="text-[10px] text-slate-400 uppercase tracking-wider">Cellar & Knowledge Engine</p>
+                </div>
+            </div>
+
+            <!-- View Navigation Tabs -->
+            <nav class="flex items-center bg-slate-950 border border-slate-800 rounded-xl p-1 text-sm font-medium">
+                <button id="nav-cellar" onclick="switchView('cellar')"
+                    class="px-4 py-1.5 rounded-lg transition text-slate-300 hover:text-white flex items-center gap-1.5">
+                    <span>🍇</span> Cellar
+                </button>
+                <button id="nav-journal" onclick="switchView('journal')"
+                    class="px-4 py-1.5 rounded-lg transition text-slate-300 hover:text-white flex items-center gap-1.5">
+                    <span>📖</span> Journal
+                </button>
+                <button id="nav-add" onclick="switchView('add')"
+                    class="px-4 py-1.5 rounded-lg transition text-slate-300 hover:text-white flex items-center gap-1.5">
+                    <span>➕</span> Add a Wine
+                </button>
+            </nav>
         </div>
     </header>
 
-    <main class="max-w-4xl mx-auto p-4 space-y-6">
+    <main class="max-w-6xl mx-auto px-4 pt-6">
 
-        <!-- Step 1: Label Scanner Card -->
-        <section class="bg-slate-800/60 border border-slate-700/60 rounded-xl p-6 shadow-xl">
-            <h2 class="text-lg font-semibold text-amber-400 mb-2">1. Snap Wine Label</h2>
-            <p class="text-sm text-slate-400 mb-4">Upload a wine bottle photo. Gemini Vision OCR will identify the label
-                and pull structural metrics from Vivino.</p>
+        <!-- ================================================================= -->
+        <!-- VIEW 1: CELLAR (Default View) -->
+        <!-- ================================================================= -->
+        <section id="view-cellar" class="space-y-6">
+            <!-- Search & Filters Toolbar -->
+            <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 shadow-xl flex flex-col md:flex-row gap-3 items-center justify-between">
+                <div class="relative w-full md:w-96">
+                    <span class="absolute inset-y-0 left-3 flex items-center text-slate-500">🔍</span>
+                    <input type="text" id="cellarSearchInput" oninput="debounceCellarSearch()"
+                        placeholder="Search producer, wine, region, varietal..."
+                        class="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-4 py-2 text-sm text-slate-200 focus:outline-none focus:border-amber-500">
+                </div>
 
-            <form id="uploadForm" class="flex flex-col sm:flex-row gap-4 items-center">
-                <input type="file" id="labelFile" accept="image/*" capture="environment" required
-                    class="block w-full text-sm text-slate-400 file:mr-4 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-amber-500 file:text-slate-950 hover:file:bg-amber-400 cursor-pointer border border-slate-700 rounded-lg bg-slate-900 p-1">
-                <button type="submit" id="scanBtn"
-                    class="w-full sm:w-auto bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-6 py-2.5 rounded-lg transition shrink-0">
-                    Analyze Label
-                </button>
-            </form>
-        </section>
+                <div class="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+                    <select id="wineTypeFilter" onchange="loadCellarWines()"
+                        class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-300 focus:outline-none">
+                        <option value="">All Types</option>
+                        <option value="red">Red</option>
+                        <option value="white">White</option>
+                        <option value="rose">Rosé</option>
+                        <option value="sparkling">Sparkling</option>
+                        <option value="fortified">Fortified</option>
+                        <option value="dessert">Dessert</option>
+                    </select>
 
-        <!-- Step 2: Extraction & Agent Progress Dashboard -->
-        <section id="agentSection" class="hidden bg-slate-800/60 border border-slate-700/60 rounded-xl p-6 space-y-4">
-            <div class="flex items-center justify-between">
-                <h2 class="text-lg font-semibold text-amber-400">2. Autonomous AI Research Agent</h2>
-                <span id="agentBadge"
-                    class="text-xs bg-blue-500/20 text-blue-400 px-2.5 py-1 rounded-full animate-pulse">Running
-                    Agent...</span>
+                    <button id="readyToDrinkBtn" onclick="toggleReadyToDrinkFilter()"
+                        class="px-3.5 py-2 rounded-xl text-xs font-semibold border border-slate-800 bg-slate-950 text-slate-300 hover:border-emerald-500/50 flex items-center gap-1.5 transition">
+                        <span class="w-2 h-2 rounded-full bg-slate-500" id="readyIndicator"></span>
+                        Ready to Drink
+                    </button>
+
+                    <button onclick="switchView('add')"
+                        class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs transition flex items-center gap-1 shrink-0 ml-auto md:ml-0">
+                        <span>📷</span> Scan New Bottle
+                    </button>
+                </div>
             </div>
 
-            <div id="ocrSummary"
-                class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs bg-slate-900/80 p-3 rounded-lg border border-slate-700">
+            <!-- Wine Cards Grid -->
+            <div id="cellarGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                 <!-- Injected via JS -->
             </div>
-
-            <div id="statusLog"
-                class="text-xs font-mono bg-slate-950 p-3 rounded-lg border border-slate-800 text-slate-300 space-y-1">
-                <div>⏳ Waiting for stream...</div>
-            </div>
-
-            <div id="researchReportContainer"
-                class="hidden prose prose-invert max-w-none bg-slate-950 p-5 rounded-xl border border-slate-800 text-slate-300 text-sm overflow-x-auto max-h-[500px]">
-                <!-- Injected compiled Markdown report -->
+            <div id="cellarEmpty" class="hidden text-center py-16 bg-slate-900/40 rounded-2xl border border-slate-800/80 p-8 space-y-3">
+                <div class="text-4xl">🍷</div>
+                <h3 class="text-base font-semibold text-slate-300">No wines matched your search</h3>
+                <p class="text-xs text-slate-500 max-w-sm mx-auto">Try clearing filters or scan a new wine bottle label to begin researching.</p>
+                <button onclick="clearCellarFilters()" class="text-xs text-amber-400 hover:underline">Clear filters</button>
             </div>
         </section>
 
-        <!-- Step 3: Personal Tasting Journal Form -->
-        <section id="journalSection" class="hidden bg-slate-800/60 border border-slate-700/60 rounded-xl p-6 space-y-4">
-            <h2 class="text-lg font-semibold text-amber-400">3. Log Your Personal Tasting Memory</h2>
 
-            <form id="tastingForm" class="space-y-4">
-                <input type="hidden" id="vintageIdInput">
+        <!-- ================================================================= -->
+        <!-- VIEW 2: WINE DETAIL VIEW -->
+        <!-- ================================================================= -->
+        <section id="view-detail" class="hidden space-y-6">
+            <button onclick="switchView('cellar')" class="text-xs text-slate-400 hover:text-amber-400 flex items-center gap-1.5 transition">
+                <span>←</span> Back to Cellar
+            </button>
 
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-xs font-medium text-slate-400 mb-1">Venue / Location</label>
-                        <input type="text" id="locationInput" placeholder="e.g., Home, Osteria del Wine, Florence"
-                            class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-100">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-slate-400 mb-1">Occasion & Companions</label>
-                        <input type="text" id="occasionInput" placeholder="e.g., Anniversary dinner with Sarah"
-                            class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-100">
-                    </div>
-                </div>
+            <div id="wineDetailContainer" class="space-y-6">
+                <!-- Injected via JS -->
+            </div>
+        </section>
 
-                <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                    <div>
-                        <label class="block text-xs font-medium text-slate-400 mb-1">Rating (1 - 10)</label>
-                        <input type="number" step="0.1" id="ratingInput" min="1" max="10" placeholder="9.2"
-                            class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-100">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-slate-400 mb-1">Price Paid ($)</label>
-                        <input type="number" step="0.01" id="priceInput" placeholder="65.00"
-                            class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-100">
-                    </div>
-                    <div class="col-span-2 sm:col-span-1">
-                        <label class="block text-xs font-medium text-slate-400 mb-1">Palate Tannin (WSET)</label>
-                        <select id="tanninInput"
-                            class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-100">
-                            <option value="medium">Medium</option>
-                            <option value="light">Light</option>
-                            <option value="medium_plus">Medium(+)</option>
-                            <option value="pronounced">High / Pronounced</option>
-                        </select>
-                    </div>
-                </div>
 
+        <!-- ================================================================= -->
+        <!-- VIEW 3: JOURNAL (Past Tasting Entries) -->
+        <!-- ================================================================= -->
+        <section id="view-journal" class="hidden space-y-6">
+            <div class="flex items-center justify-between">
                 <div>
-                    <label class="block text-xs font-medium text-slate-400 mb-1">Tasting Notes</label>
-                    <textarea id="notesInput" rows="3"
-                        placeholder="Aromas of black cherry, tobacco leaf, structured tannins, lingering espresso finish..."
-                        class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-100"></textarea>
+                    <h2 class="text-xl font-bold text-amber-400">Tasting Journal</h2>
+                    <p class="text-xs text-slate-400">Chronological history of your personal tasting memories</p>
                 </div>
-
-                <button type="submit"
-                    class="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-3 rounded-lg transition">
-                    Save Tasting Journal Entry
-                </button>
-            </form>
-        </section>
-
-        <!-- Step 4: Conversational Assistant -->
-        <section id="chatSection" class="hidden bg-slate-800/60 border border-slate-700/60 rounded-xl p-6 space-y-4">
-            <h2 class="text-lg font-semibold text-amber-400">4. Ask Sommelier AI About This Wine</h2>
-
-            <div id="chatHistory"
-                class="bg-slate-950 p-4 rounded-xl border border-slate-800 min-h-[150px] max-h-[300px] overflow-y-auto space-y-3 text-sm">
-                <div class="text-slate-500 italic">Ask me anything about the producer, vintage weather, oak aging, or
-                    food pairing ideas!</div>
             </div>
 
-            <div class="flex gap-2">
-                <input type="text" id="chatInput"
-                    placeholder="e.g. What food should I pair with this, and what is its aging potential?"
-                    class="flex-1 bg-slate-900 border border-slate-700 rounded-lg p-2.5 text-sm text-slate-100">
-                <button id="sendChatBtn"
-                    class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-5 py-2.5 rounded-lg">Ask</button>
+            <div id="journalEntriesList" class="space-y-4">
+                <!-- Injected via JS -->
+            </div>
+            <div id="journalEmpty" class="hidden text-center py-16 bg-slate-900/40 rounded-2xl border border-slate-800/80 p-8 space-y-2">
+                <div class="text-4xl">📖</div>
+                <h3 class="text-base font-semibold text-slate-300">No tasting entries yet</h3>
+                <p class="text-xs text-slate-500">Log a tasting memory after scanning and researching a bottle.</p>
+            </div>
+        </section>
+
+
+        <!-- ================================================================= -->
+        <!-- VIEW 4: ADD A WINE (Scan -> Research -> Review -> Taste) -->
+        <!-- ================================================================= -->
+        <section id="view-add" class="hidden space-y-6">
+            <!-- Step 1: Label Scanner Card -->
+            <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-lg font-semibold text-amber-400">1. Snap Wine Label</h2>
+                        <p class="text-xs text-slate-400">Upload a wine bottle photo. Gemini Vision OCR identifies the estate and vintage.</p>
+                    </div>
+                    <span class="text-xs bg-slate-800 text-slate-300 px-3 py-1 rounded-full border border-slate-700">Step 1 of 4</span>
+                </div>
+
+                <form id="uploadForm" class="flex flex-col sm:flex-row gap-3 items-center">
+                    <input type="file" id="labelFile" accept="image/*" capture="environment" required
+                        class="block w-full text-xs text-slate-400 file:mr-3 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-amber-500 file:text-slate-950 hover:file:bg-amber-400 cursor-pointer border border-slate-800 rounded-xl bg-slate-950 p-1">
+                    <button type="submit" id="scanBtn"
+                        class="w-full sm:w-auto bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-6 py-2.5 rounded-xl text-sm transition shrink-0">
+                        Analyze Label
+                    </button>
+                </form>
+
+                <!-- Producer Match / Reuse Notice -->
+                <div id="producerReuseBanner" class="hidden bg-emerald-950/40 border border-emerald-500/30 rounded-xl p-3 text-xs text-emerald-300 flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <span>🏛️</span>
+                        <span>Matched existing estate: <strong id="reusedProducerName"></strong></span>
+                    </div>
+                    <span class="bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded text-[11px] font-medium">Estate Reused</span>
+                </div>
+            </div>
+
+            <!-- Step 2: Extraction & Research Agent Progress -->
+            <div id="agentSection" class="hidden bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-4 shadow-xl">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-lg font-semibold text-amber-400">2. Autonomous AI Research Agent</h2>
+                        <p class="text-xs text-slate-400">Performs parallel web grounding across winery history, terroir, vinification, and appellation.</p>
+                    </div>
+                    <span id="agentBadge" class="text-xs bg-blue-500/20 text-blue-400 px-3 py-1 rounded-full border border-blue-500/30 animate-pulse">Running Agent...</span>
+                </div>
+
+                <!-- Label Extracted Summary -->
+                <div id="ocrSummary" class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs bg-slate-950 p-3.5 rounded-xl border border-slate-800">
+                    <!-- Injected via JS -->
+                </div>
+
+                <!-- Skip Producer Checkbox if estate already documented -->
+                <div id="skipProducerOption" class="hidden bg-slate-950/80 border border-amber-500/20 p-3 rounded-xl flex items-center gap-2.5 text-xs text-slate-300">
+                    <input type="checkbox" id="skipProducerCheckbox" checked class="w-4 h-4 accent-amber-500 rounded">
+                    <label for="skipProducerCheckbox" class="cursor-pointer">
+                        <strong>Estate already researched:</strong> Skip Producer domain search to retain existing history & philosophy
+                    </label>
+                </div>
+
+                <div id="statusLog" class="text-xs font-mono bg-slate-950 p-3.5 rounded-xl border border-slate-800/80 text-slate-300 space-y-1">
+                    <div>⏳ Initializing research pipeline...</div>
+                </div>
+
+                <!-- Action Button once research finishes: Extract Structured Dossier -->
+                <div id="extractActions" class="hidden pt-2 flex flex-wrap gap-3">
+                    <button id="extractDossierBtn" onclick="runExtraction()"
+                        class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-5 py-2.5 rounded-xl text-xs transition flex items-center gap-1.5 shadow-lg shadow-amber-500/10">
+                        <span>✨</span> Extract & Populate Structured Database Tables
+                    </button>
+                    <button onclick="toggleMarkdownReport()" class="text-xs text-slate-400 hover:text-slate-200 border border-slate-800 px-4 py-2 rounded-xl transition">
+                        View Raw Markdown Dossier
+                    </button>
+                </div>
+
+                <div id="researchReportContainer" class="hidden prose prose-invert max-w-none bg-slate-950 p-5 rounded-xl border border-slate-800 text-slate-300 text-xs overflow-x-auto max-h-[450px]">
+                    <!-- Injected compiled Markdown report -->
+                </div>
+            </div>
+
+            <!-- Step 3: Proposal Review Card (Embedded in Add a Wine flow) -->
+            <div id="proposalSection" class="hidden bg-slate-900/90 border border-amber-500/30 rounded-2xl p-6 space-y-6 shadow-2xl">
+                <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                    <div>
+                        <h2 class="text-lg font-bold text-amber-400 flex items-center gap-2">
+                            <span>📋</span> Structured Dossier Proposal Review
+                        </h2>
+                        <p class="text-xs text-slate-400">Review facts extracted from research. Uncheck fields you do not wish to commit.</p>
+                    </div>
+                    <span class="text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2.5 py-1 rounded-full">Human-in-the-Loop</span>
+                </div>
+
+                <div id="proposalFormContent" class="space-y-6">
+                    <!-- Injected via JS -->
+                </div>
+
+                <div class="flex flex-wrap items-center justify-between gap-4 pt-4 border-t border-slate-800">
+                    <button onclick="rejectCurrentProposal()" class="text-xs text-rose-400 hover:text-rose-300 px-4 py-2 rounded-xl border border-rose-500/20 hover:bg-rose-500/10 transition">
+                        Reject Proposal
+                    </button>
+                    <button onclick="acceptCurrentProposal()" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-6 py-2.5 rounded-xl text-xs transition flex items-center gap-1.5 shadow-lg shadow-emerald-500/20">
+                        <span>✓</span> Accept & Commit Structured Dossier
+                    </button>
+                </div>
+            </div>
+
+            <!-- Step 4: Personal Tasting Journal Form -->
+            <div id="journalSection" class="hidden bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-4 shadow-xl">
+                <h2 class="text-lg font-semibold text-amber-400">3. Log Your Personal Tasting Memory</h2>
+                <p class="text-xs text-slate-400">Record your subjective assessment and memories alongside the AI sommelier's predicted matrix.</p>
+
+                <!-- Research Predicted vs Actual Profile Preview -->
+                <div id="predictedVsActualPreview" class="hidden bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2 text-xs">
+                    <div class="font-semibold text-amber-400 flex items-center gap-1.5">
+                        <span>🎯</span> Research Predicted Tasting Profile
+                    </div>
+                    <div id="predictedProfileSummary" class="text-slate-300 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <!-- Injected via JS -->
+                    </div>
+                </div>
+
+                <form id="tastingForm" class="space-y-4">
+                    <input type="hidden" id="vintageIdInput">
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-400 mb-1">Venue / Location</label>
+                            <input type="text" id="locationInput" placeholder="e.g., Home, Osteria del Wine, Florence"
+                                class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-100 focus:outline-none focus:border-amber-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-400 mb-1">Occasion & Companions</label>
+                            <input type="text" id="occasionInput" placeholder="e.g., Anniversary dinner with Sarah"
+                                class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-100 focus:outline-none focus:border-amber-500">
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-400 mb-1">Personal Rating (1 - 10)</label>
+                            <input type="number" step="0.1" id="ratingInput" min="1" max="10" placeholder="9.2"
+                                class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-100 focus:outline-none focus:border-amber-500">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-400 mb-1">Price Paid ($)</label>
+                            <input type="number" step="0.01" id="priceInput" placeholder="65.00"
+                                class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-100 focus:outline-none focus:border-amber-500">
+                        </div>
+                        <div class="col-span-2 sm:col-span-1">
+                            <label class="block text-xs font-medium text-slate-400 mb-1">Palate Tannin (WSET SAT)</label>
+                            <select id="tanninInput"
+                                class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-100 focus:outline-none focus:border-amber-500">
+                                <option value="medium">Medium</option>
+                                <option value="light">Light</option>
+                                <option value="medium_plus">Medium(+)</option>
+                                <option value="pronounced">High / Pronounced</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-medium text-slate-400 mb-1">Personal Tasting Notes</label>
+                        <textarea id="notesInput" rows="3"
+                            placeholder="Aromas of black cherry, tobacco leaf, structured tannins, lingering graphite finish..."
+                            class="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-100 focus:outline-none focus:border-amber-500"></textarea>
+                    </div>
+
+                    <button type="submit"
+                        class="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold py-3 rounded-xl text-xs transition shadow-lg shadow-amber-500/10">
+                        Save Tasting Journal Entry
+                    </button>
+                </form>
+            </div>
+
+            <!-- Step 5: Conversational Sommelier Chat -->
+            <div id="chatSection" class="hidden bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-4 shadow-xl">
+                <h2 class="text-lg font-semibold text-amber-400">4. Ask Sommelier AI About This Wine</h2>
+
+                <div id="chatHistory"
+                    class="bg-slate-950 p-4 rounded-xl border border-slate-800 min-h-[140px] max-h-[300px] overflow-y-auto space-y-3 text-xs">
+                    <div class="text-slate-500 italic">Ask me anything about food pairings, decanting time, or aging potential!</div>
+                </div>
+
+                <div class="flex gap-2">
+                    <input type="text" id="chatInput"
+                        placeholder="e.g. Should I decant this tonight, and what cheese pairs best with it?"
+                        class="flex-1 bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-slate-100 focus:outline-none focus:border-amber-500">
+                    <button id="sendChatBtn"
+                        class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-5 py-2.5 rounded-xl text-xs transition">Ask</button>
+                </div>
             </div>
         </section>
 
     </main>
 
-    <script>
-        let currentVintageId = null;
+    <!-- Review Proposal Modal (Callable from Detail or Add flow) -->
+    <div id="proposalModal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+        <div class="bg-slate-900 border border-slate-800 max-w-4xl w-full rounded-2xl p-6 space-y-6 my-8 max-h-[90vh] overflow-y-auto shadow-2xl">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                <div>
+                    <h3 class="text-lg font-bold text-amber-400">Structured Dossier Proposal</h3>
+                    <p class="text-xs text-slate-400">Extracts facts into structured database tables</p>
+                </div>
+                <button onclick="closeProposalModal()" class="text-slate-400 hover:text-white text-lg">✕</button>
+            </div>
+            <div id="modalProposalContent"></div>
+            <div class="flex justify-end gap-3 pt-3 border-t border-slate-800">
+                <button onclick="closeProposalModal()" class="text-xs px-4 py-2 border border-slate-800 rounded-xl text-slate-400 hover:text-white">Close</button>
+                <button onclick="acceptModalProposal()" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-5 py-2 rounded-xl text-xs">Accept & Commit</button>
+            </div>
+        </div>
+    </div>
 
-        // Handle Label Upload & Analysis
+    <!-- Application Script -->
+    <script>
+        // State
+        let currentView = 'cellar';
+        let currentVintageId = null;
+        let currentWineId = null;
+        let currentProposal = null;
+        let activeProposalId = null;
+        let readyToDrinkFilter = false;
+        let searchTimeout = null;
+
+        // Navigation
+        function switchView(viewName) {
+            currentView = viewName;
+            ['cellar', 'detail', 'journal', 'add'].forEach(v => {
+                const el = document.getElementById(`view-${v}`);
+                if (el) el.classList.add('hidden');
+            });
+
+            // Update tab styles
+            ['cellar', 'journal', 'add'].forEach(v => {
+                const btn = document.getElementById(`nav-${v}`);
+                if (btn) {
+                    if (v === viewName || (viewName === 'detail' && v === 'cellar')) {
+                        btn.className = 'px-4 py-1.5 rounded-lg transition text-slate-950 font-bold bg-amber-500 flex items-center gap-1.5 shadow-sm';
+                    } else {
+                        btn.className = 'px-4 py-1.5 rounded-lg transition text-slate-300 hover:text-white flex items-center gap-1.5';
+                    }
+                }
+            });
+
+            const targetEl = document.getElementById(`view-${viewName}`);
+            if (targetEl) targetEl.classList.remove('hidden');
+
+            if (viewName === 'cellar') loadCellarWines();
+            if (viewName === 'journal') loadJournalEntries();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // ===================================================================
+        // CELLAR VIEW LOGIC
+        // ===================================================================
+        function debounceCellarSearch() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => { loadCellarWines(); }, 250);
+        }
+
+        function toggleReadyToDrinkFilter() {
+            readyToDrinkFilter = !readyToDrinkFilter;
+            const btn = document.getElementById('readyToDrinkBtn');
+            const ind = document.getElementById('readyIndicator');
+            if (readyToDrinkFilter) {
+                btn.classList.add('border-emerald-500', 'text-emerald-400', 'bg-emerald-950/30');
+                ind.classList.remove('bg-slate-500');
+                ind.classList.add('bg-emerald-400');
+            } else {
+                btn.classList.remove('border-emerald-500', 'text-emerald-400', 'bg-emerald-950/30');
+                ind.classList.add('bg-slate-500');
+                ind.classList.remove('bg-emerald-400');
+            }
+            loadCellarWines();
+        }
+
+        function clearCellarFilters() {
+            document.getElementById('cellarSearchInput').value = '';
+            document.getElementById('wineTypeFilter').value = '';
+            readyToDrinkFilter = false;
+            const btn = document.getElementById('readyToDrinkBtn');
+            const ind = document.getElementById('readyIndicator');
+            btn.classList.remove('border-emerald-500', 'text-emerald-400', 'bg-emerald-950/30');
+            ind.classList.add('bg-slate-500');
+            ind.classList.remove('bg-emerald-400');
+            loadCellarWines();
+        }
+
+        async function loadCellarWines() {
+            const q = document.getElementById('cellarSearchInput').value.trim();
+            const wineType = document.getElementById('wineTypeFilter').value;
+            let url = `/api/wines?`;
+            const params = new URLSearchParams();
+            if (q) params.append('q', q);
+            if (wineType) params.append('wine_type', wineType);
+            if (readyToDrinkFilter) params.append('drink_status', 'in_window');
+            url += params.toString();
+
+            try {
+                const res = await fetch(url);
+                const wines = await res.json();
+                renderCellarGrid(wines);
+            } catch (err) {
+                console.error('Failed to load wines:', err);
+            }
+        }
+
+        function renderCellarGrid(wines) {
+            const grid = document.getElementById('cellarGrid');
+            const empty = document.getElementById('cellarEmpty');
+
+            if (!wines || wines.length === 0) {
+                grid.innerHTML = '';
+                empty.classList.remove('hidden');
+                return;
+            }
+            empty.classList.add('hidden');
+
+            grid.innerHTML = wines.map(w => {
+                const photoTag = w.latest_label_photo
+                    ? `<img src="${w.latest_label_photo}" class="w-full h-44 object-cover rounded-xl border border-slate-800 mb-3.5" alt="Bottle Photo">`
+                    : `<div class="w-full h-32 bg-slate-950 rounded-xl border border-slate-800/80 mb-3.5 flex items-center justify-center text-3xl text-slate-700">🍾</div>`;
+
+                const typePill = `<span class="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded font-semibold bg-slate-800 text-slate-300">${w.wine_type}</span>`;
+                const classifPill = w.classification ? `<span class="text-[10px] text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded">${w.classification}</span>` : '';
+
+                const vintageBadges = w.vintages.map(v => {
+                    let badgeClass = `badge-${v.drink_status}`;
+                    let statusLabel = v.drink_status === 'in_window' ? 'Ready to Drink' : (v.drink_status === 'too_young' ? 'Too Young' : (v.drink_status === 'past_peak' ? 'Past Peak' : 'Cellar'));
+                    let windowStr = (v.drinking_window_start && v.drinking_window_end) ? `(${v.drinking_window_start}–${v.drinking_window_end})` : '';
+                    return `
+                        <div class="flex items-center justify-between text-xs py-1 border-t border-slate-800/60">
+                            <span class="font-bold text-slate-200">${v.year || 'NV'}</span>
+                            <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full ${badgeClass}">
+                                ● ${statusLabel} ${windowStr}
+                            </span>
+                        </div>
+                    `;
+                }).join('');
+
+                const structuredBadges = `
+                    <div class="flex gap-2 text-[10px] text-slate-400 pt-2 border-t border-slate-800/80">
+                        <span class="${w.has_terroir ? 'text-emerald-400 font-medium' : 'text-slate-600'}">Terroir ${w.has_terroir ? '✓' : '—'}</span>
+                        <span>•</span>
+                        <span class="${w.has_vinification ? 'text-emerald-400 font-medium' : 'text-slate-600'}">Vinification ${w.has_vinification ? '✓' : '—'}</span>
+                    </div>
+                `;
+
+                return `
+                    <div onclick="openWineDetail(${w.id})"
+                        class="bg-slate-900/80 hover:bg-slate-850 border border-slate-800 hover:border-amber-500/50 rounded-2xl p-5 cursor-pointer transition shadow-xl space-y-3 group">
+                        ${photoTag}
+                        <div class="flex items-center gap-2">${typePill} ${classifPill}</div>
+                        <div>
+                            <h3 class="font-bold text-base text-slate-100 group-hover:text-amber-400 transition leading-tight">${w.name}</h3>
+                            <p class="text-xs text-slate-400">${w.producer.name} • ${w.appellation || w.producer.region}</p>
+                        </div>
+                        <div class="space-y-1 pt-1">${vintageBadges}</div>
+                        ${structuredBadges}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // ===================================================================
+        // WINE DETAIL VIEW
+        // ===================================================================
+        async function openWineDetail(wineId) {
+            currentWineId = wineId;
+            switchView('detail');
+            const container = document.getElementById('wineDetailContainer');
+            container.innerHTML = '<div class="text-center py-16 text-slate-500">Loading wine dossier...</div>';
+
+            try {
+                const res = await fetch(`/api/wines/${wineId}`);
+                const data = await res.json();
+                renderWineDetail(data);
+            } catch (err) {
+                container.innerHTML = `<div class="text-rose-400">Failed to load wine: ${err.message}</div>`;
+            }
+        }
+
+        function renderWineDetail(w) {
+            const container = document.getElementById('wineDetailContainer');
+
+            const heroPhoto = w.latest_label_photo
+                ? `<img src="${w.latest_label_photo}" class="w-full sm:w-64 h-64 object-cover rounded-2xl border border-slate-800 shrink-0 shadow-2xl">`
+                : '';
+
+            // Producer Certifications pills
+            const certs = (w.producer.certifications || []).map(c => `
+                <span class="text-[11px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2.5 py-1 rounded-full font-medium">🌿 ${c}</span>
+            `).join('');
+
+            // Terroir Section
+            const terroirContent = w.terroir ? `
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+                    <div><span class="text-slate-500">Soils:</span><div class="flex flex-wrap gap-1 mt-1">${(w.terroir.soil_types || []).map(s => `<span class="bg-slate-950 border border-slate-800 px-2 py-0.5 rounded text-[11px] text-slate-300">${s}</span>`).join('') || '—'}</div></div>
+                    <div><span class="text-slate-500">Elevation:</span><p class="font-semibold text-slate-200 mt-1">${w.terroir.elevation_meters ? `${w.terroir.elevation_meters} m` : '—'}</p></div>
+                    <div><span class="text-slate-500">Aspect / Exposure:</span><p class="font-semibold text-slate-200 mt-1">${w.terroir.aspect || '—'}</p></div>
+                    <div><span class="text-slate-500">Single Vineyard:</span><p class="font-semibold text-slate-200 mt-1">${w.terroir.single_vineyard_name || 'Estate parcels'}</p></div>
+                </div>
+            ` : `<div class="text-xs text-slate-500 italic">No structured terroir record yet. Run extraction from a vintage dossier below.</div>`;
+
+            // Vinification Section
+            const vinifContent = w.vinification ? `
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+                    <div><span class="text-slate-500">Vessels:</span><p class="font-semibold text-slate-200 mt-1">${w.vinification.fermentation_vessel || '—'}</p></div>
+                    <div><span class="text-slate-500">Yeast Selection:</span><p class="font-semibold text-slate-200 mt-1">${w.vinification.yeast_type || '—'}</p></div>
+                    <div><span class="text-slate-500">Oak Regime:</span><p class="font-semibold text-slate-200 mt-1">${w.vinification.oak_type || '—'} (${w.vinification.new_oak_percent ? `${w.vinification.new_oak_percent}% new` : 'N/A'})</p></div>
+                    <div><span class="text-slate-500">Aging Duration:</span><p class="font-semibold text-slate-200 mt-1">${w.vinification.aging_months ? `${w.vinification.aging_months} months` : '—'}</p></div>
+                </div>
+                <div class="text-xs pt-2 border-t border-slate-800/80 flex flex-wrap gap-4 text-slate-400">
+                    <span>Malolactic Fermentation: <strong class="text-slate-200">${w.vinification.malolactic_fermentation === true ? 'Yes' : (w.vinification.malolactic_fermentation === false ? 'No' : 'N/A')}</strong></span>
+                    <span>Filtration: <strong class="text-slate-200">${w.vinification.filtration_notes || '—'}</strong></span>
+                </div>
+            ` : `<div class="text-xs text-slate-500 italic">No structured vinification record yet. Run extraction from a vintage dossier below.</div>`;
+
+            // Vintages Panels
+            const vintagesPanels = w.vintages.map(v => {
+                let badgeClass = `badge-${v.drink_status}`;
+                let statusLabel = v.drink_status === 'in_window' ? 'Ready to Drink' : (v.drink_status === 'too_young' ? 'Too Young' : (v.drink_status === 'past_peak' ? 'Past Peak' : 'Cellar'));
+
+                // Blends list
+                const blendsHtml = v.blends && v.blends.length > 0 ? `
+                    <div class="flex flex-wrap gap-2 text-xs">
+                        ${v.blends.map(b => `<span class="bg-slate-950 border border-slate-800 px-2.5 py-1 rounded-lg text-slate-200"><strong>${b.percentage ? `${b.percentage}%` : ''}</strong> ${b.varietal_name}</span>`).join('')}
+                    </div>
+                ` : `<span class="text-xs text-slate-500 italic">Blend unrecorded</span>`;
+
+                // Predicted Profile Card
+                const pred = v.predicted_profile_json;
+                const predHtml = pred ? `
+                    <div class="bg-slate-950/80 border border-slate-800 rounded-xl p-4 text-xs space-y-2">
+                        <div class="text-amber-400 font-bold flex items-center gap-1.5">
+                            <span>🎯</span> Research Predicted Sensory Matrix
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-slate-300">
+                            <div><span class="text-slate-500">Appearance:</span> <br>${pred.appearance || '—'}</div>
+                            <div><span class="text-slate-500">Cellaring & Evolution:</span> <br>${pred.cellaring_note || '—'}</div>
+                            <div><span class="text-slate-500">Nose / Aromatics:</span> <br>${(pred.nose || []).join(', ') || '—'}</div>
+                            <div><span class="text-slate-500">Palate & Structure:</span> <br>${(pred.palate || []).join(', ') || '—'}</div>
+                        </div>
+                    </div>
+                ` : '';
+
+                // Side-by-Side: Research Predicted vs User Tastings
+                const tastingsWithComparison = (v.journal_entries || []).map(j => {
+                    const tp = j.tasting_profile;
+                    return `
+                        <div class="bg-slate-950 border border-slate-800/80 rounded-xl p-4 space-y-3">
+                            <div class="flex items-center justify-between border-b border-slate-800/60 pb-2">
+                                <span class="font-bold text-amber-400">Tasting: ${new Date(j.drank_at).toLocaleDateString()}</span>
+                                <span class="bg-amber-500/10 text-amber-400 font-bold px-2 py-0.5 rounded text-xs">★ ${j.personal_rating || '—'}/10</span>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                                <div class="space-y-1.5 bg-slate-900/60 p-3 rounded-lg border border-slate-800/50">
+                                    <div class="font-semibold text-amber-400">🤖 Research Predicted</div>
+                                    <p class="text-slate-300 leading-relaxed">${pred ? (pred.structure_notes || (pred.palate || []).join(', ')) : 'No predicted profile available.'}</p>
+                                </div>
+                                <div class="space-y-1.5 bg-slate-900/60 p-3 rounded-lg border border-slate-800/50">
+                                    <div class="font-semibold text-emerald-400">🍷 Your Tasting Experience</div>
+                                    <p class="text-slate-300 leading-relaxed">${j.user_notes || 'No written notes.'}</p>
+                                    ${tp ? `<div class="text-[11px] text-slate-400 pt-1">Tannin: <strong class="text-slate-200">${tp.palate_tannin || '—'}</strong> • Acidity: <strong class="text-slate-200">${tp.palate_acidity || '—'}</strong> • Quality: <strong class="text-slate-200">${tp.overall_quality || '—'}</strong></div>` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                // Action buttons for vintage: Extract Dossier
+                const extractBtn = v.research_corpus ? `
+                    <button onclick="triggerExtractModal(${v.id})"
+                        class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-3 py-1.5 rounded-xl text-xs transition flex items-center gap-1">
+                        <span>✨</span> ${v.latest_proposal ? 'Review / Re-extract Proposal' : 'Extract Structured Dossier'}
+                    </button>
+                ` : `<span class="text-xs text-slate-500">No corpus available</span>`;
+
+                return `
+                    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-xl">
+                        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
+                            <div class="flex items-center gap-3">
+                                <h3 class="text-xl font-bold text-slate-100">${v.year || 'Non-Vintage'}</h3>
+                                <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full ${badgeClass}">● ${statusLabel}</span>
+                                ${v.abv ? `<span class="text-xs bg-slate-800 text-slate-300 px-2 py-0.5 rounded font-mono">${v.abv}% ABV</span>` : ''}
+                            </div>
+                            <div class="flex items-center gap-2">
+                                ${extractBtn}
+                            </div>
+                        </div>
+
+                        <!-- Weather and Blend -->
+                        <div class="space-y-3">
+                            ${v.weather_summary ? `
+                                <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800 text-xs text-slate-300 leading-relaxed">
+                                    <strong class="text-amber-400 block mb-1">🌤️ Vintage Growing Season & Weather:</strong>
+                                    ${v.weather_summary}
+                                </div>
+                            ` : ''}
+                            <div><strong class="text-xs text-slate-400 block mb-1.5">Grape Composition:</strong>${blendsHtml}</div>
+                        </div>
+
+                        ${predHtml}
+
+                        ${tastingsWithComparison.length > 0 ? `
+                            <div class="space-y-2 pt-2 border-t border-slate-800/80">
+                                <h4 class="text-xs font-bold text-slate-300 uppercase tracking-wider">Research vs Your Tasting Comparison</h4>
+                                ${tastingsWithComparison}
+                            </div>
+                        ` : ''}
+
+                        <!-- Expandable Raw Research Dossier -->
+                        ${v.research_corpus ? `
+                            <details class="text-xs text-slate-400 border-t border-slate-800/80 pt-3">
+                                <summary class="cursor-pointer hover:text-amber-400 transition font-medium">📄 View Full Research Dossier Markdown & Sources</summary>
+                                <div class="mt-3 bg-slate-950 p-4 rounded-xl border border-slate-800 max-h-96 overflow-y-auto prose prose-invert max-w-none text-xs">
+                                    ${marked.parse(v.research_corpus.full_research_markdown)}
+                                </div>
+                            </details>
+                        ` : ''}
+                    </div>
+                `;
+            }).join('');
+
+            container.innerHTML = `
+                <!-- Hero Header -->
+                <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl flex flex-col sm:flex-row gap-6 items-start">
+                    ${heroPhoto}
+                    <div class="space-y-3 flex-1">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="text-xs font-bold uppercase bg-amber-500 text-slate-950 px-2.5 py-0.5 rounded-md">${w.wine_type}</span>
+                            ${w.classification ? `<span class="text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2.5 py-0.5 rounded-md font-semibold">${w.classification}</span>` : ''}
+                            ${certs}
+                        </div>
+                        <h2 class="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">${w.name}</h2>
+                        <p class="text-sm text-slate-400 font-medium">${w.producer.name} • ${w.appellation || w.producer.region}, ${w.producer.country}</p>
+                        ${w.producer.winemaker_philosophy ? `
+                            <div class="bg-slate-950/80 border-l-2 border-amber-500 p-3 rounded-r-xl text-xs text-slate-300 italic">
+                                "${w.producer.winemaker_philosophy}"
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+
+                <!-- Estate & Terroir Tabs/Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 space-y-3 shadow-xl">
+                        <h3 class="text-sm font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                            <span>🌱</span> Parcel Terroir & Geology (Wine Cuvée)
+                        </h3>
+                        ${terroirContent}
+                    </div>
+                    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 space-y-3 shadow-xl">
+                        <h3 class="text-sm font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                            <span>🪵</span> Technical Vinification & Aging (Wine Cuvée)
+                        </h3>
+                        ${vinifContent}
+                    </div>
+                </div>
+
+                <!-- Producer Dossier -->
+                ${w.producer.history_md ? `
+                    <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 space-y-2 shadow-xl">
+                        <h3 class="text-sm font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                            <span>🏛️</span> Estate History & Background
+                        </h3>
+                        <p class="text-xs text-slate-300 leading-relaxed">${w.producer.history_md}</p>
+                    </div>
+                ` : ''}
+
+                <!-- Vintages Section -->
+                <div class="space-y-4">
+                    <h3 class="text-base font-bold text-slate-200">Harvest Vintages</h3>
+                    ${vintagesPanels}
+                </div>
+            `;
+        }
+
+        // ===================================================================
+        // PROPOSAL MODAL LOGIC (Extraction & Human-in-the-Loop Review)
+        // ===================================================================
+        async function triggerExtractModal(vintageId) {
+            activeProposalId = null;
+            document.getElementById('proposalModal').classList.remove('hidden');
+            const content = document.getElementById('modalProposalContent');
+            content.innerHTML = '<div class="text-center py-12 text-slate-400">Extracting structured knowledge via Gemini...</div>';
+
+            try {
+                const res = await fetch(`/api/vintages/${vintageId}/extract`, { method: 'POST' });
+                const proposal = await res.json();
+                activeProposalId = proposal.proposal_id;
+                currentProposal = proposal;
+                renderProposalForm(proposal, 'modalProposalContent');
+            } catch (err) {
+                content.innerHTML = `<div class="text-rose-400">Extraction failed: ${err.message}</div>`;
+            }
+        }
+
+        function closeProposalModal() {
+            document.getElementById('proposalModal').classList.add('hidden');
+        }
+
+        function renderProposalForm(proposal, targetElementId) {
+            const container = document.getElementById(targetElementId);
+            const proposed = proposal.proposed;
+            const current = proposal.current;
+
+            // Conflicts Block
+            const conflictsHtml = (proposed.conflicts || []).length > 0 ? `
+                <div class="bg-amber-950/30 border border-amber-500/40 rounded-xl p-4 space-y-3">
+                    <h4 class="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <span>⚠️</span> Disagreements Found Across Domain Sources (Required Resolution)
+                    </h4>
+                    <p class="text-[11px] text-slate-400">The reports state conflicting facts. Pick one value for each or keep as documented:</p>
+                    <div class="space-y-2">
+                        ${proposed.conflicts.map((c, i) => `
+                            <div class="bg-slate-950 p-2.5 rounded-lg border border-slate-800 text-xs space-y-1.5">
+                                <div class="font-bold text-slate-200">${c.field} <span class="text-slate-500 font-normal">(${c.note || ''})</span></div>
+                                <div class="flex flex-wrap gap-2">
+                                    ${(c.values_found || []).map((val, vi) => `
+                                        <label class="flex items-center gap-1.5 bg-slate-900 border border-slate-700 px-2 py-1 rounded text-[11px] cursor-pointer hover:border-amber-400">
+                                            <input type="radio" name="conflict_${i}" value="${val}" ${vi === 0 ? 'checked' : ''} class="accent-amber-500">
+                                            <span>${val}</span>
+                                        </label>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            ` : '';
+
+            // Helper to render field row
+            function fieldRow(label, section, key, proposedVal, currentVal) {
+                const isCurrentEmpty = currentVal === null || currentVal === undefined || currentVal === '' || (Array.isArray(currentVal) && currentVal.length === 0);
+                const isOverwriting = !isCurrentEmpty;
+                const defaultChecked = isCurrentEmpty ? 'checked' : ''; // default accept when current empty, unchecked when overwriting
+
+                const propDisplay = Array.isArray(proposedVal) ? proposedVal.join(', ') : (proposedVal !== null && proposedVal !== undefined ? proposedVal : '<em class="text-slate-600">null</em>');
+                const currDisplay = Array.isArray(currentVal) ? currentVal.join(', ') : (currentVal !== null && currentVal !== undefined ? currentVal : '<em class="text-slate-600">empty</em>');
+
+                return `
+                    <tr class="border-b border-slate-800/60 text-xs">
+                        <td class="py-2 pr-2 text-center w-8">
+                            <input type="checkbox" id="chk_${section}_${key}" ${defaultChecked} class="w-3.5 h-3.5 accent-emerald-500 rounded">
+                        </td>
+                        <td class="py-2 pr-3 font-medium text-slate-300 w-36">${label}</td>
+                        <td class="py-2 pr-3 text-emerald-400">${propDisplay}</td>
+                        <td class="py-2 text-slate-400">${currDisplay}</td>
+                    </tr>
+                `;
+            }
+
+            // Unmapped Facts
+            const unmappedHtml = (proposed.unmapped_facts || []).length > 0 ? `
+                <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 text-xs space-y-2">
+                    <div class="flex items-center justify-between">
+                        <strong class="text-slate-300 font-bold">Salient Tech Notes (No schema home):</strong>
+                        <label class="flex items-center gap-1.5 text-slate-400 text-[11px] cursor-pointer">
+                            <input type="checkbox" id="appendUnmappedCheckbox" checked class="accent-amber-500">
+                            Append to Vintage Notes
+                        </label>
+                    </div>
+                    <ul class="list-disc pl-4 space-y-1 text-slate-400">
+                        ${proposed.unmapped_facts.map(f => `<li>${f}</li>`).join('')}
+                    </ul>
+                </div>
+            ` : '';
+
+            container.innerHTML = `
+                ${conflictsHtml}
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left">
+                        <thead>
+                            <tr class="border-b border-slate-800 text-[11px] uppercase tracking-wider text-slate-500">
+                                <th class="py-2 text-center">Accept</th>
+                                <th class="py-2">Field</th>
+                                <th class="py-2 text-emerald-400">Proposed (From Research)</th>
+                                <th class="py-2 text-slate-400">Current (In DB)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Producer -->
+                            <tr class="bg-slate-950/60 font-bold text-amber-400 text-xs"><td colspan="4" class="py-1.5 px-1">🏛️ Producer</td></tr>
+                            ${fieldRow('Canonical Name', 'prod', 'canonical_name', proposed.producer.canonical_name, current.producer.canonical_name)}
+                            ${fieldRow('Farming Practice', 'prod', 'farming_practices', proposed.producer.farming_practices, current.producer.farming_practices)}
+                            ${fieldRow('Certifications', 'prod', 'certifications', proposed.producer.certifications, current.producer.certifications)}
+                            ${fieldRow('Winemaker Philosophy', 'prod', 'winemaker_philosophy', proposed.producer.winemaker_philosophy, current.producer.winemaker_philosophy)}
+                            ${fieldRow('History Summary', 'prod', 'history_summary', proposed.producer.history_summary, current.producer.history_summary)}
+
+                            <!-- Wine -->
+                            <tr class="bg-slate-950/60 font-bold text-amber-400 text-xs"><td colspan="4" class="py-1.5 px-1">🍷 Wine</td></tr>
+                            ${fieldRow('Classification', 'wine', 'classification', proposed.wine.classification, current.wine.classification)}
+                            ${fieldRow('Appellation', 'wine', 'appellation', proposed.wine.appellation, current.wine.appellation)}
+                            ${fieldRow('Wine Type', 'wine', 'wine_type', proposed.wine.wine_type, current.wine.wine_type)}
+
+                            <!-- Terroir (to Wine) -->
+                            <tr class="bg-slate-950/60 font-bold text-amber-400 text-xs"><td colspan="4" class="py-1.5 px-1">🌱 Terroir (Parcel Level)</td></tr>
+                            ${fieldRow('Soil Types', 'terroir', 'soil_types', proposed.terroir.soil_types, current.terroir.soil_types)}
+                            ${fieldRow('Elevation (m)', 'terroir', 'elevation_meters', proposed.terroir.elevation_meters, current.terroir.elevation_meters)}
+                            ${fieldRow('Aspect', 'terroir', 'aspect', proposed.terroir.aspect, current.terroir.aspect)}
+
+                            <!-- Vinification (to Wine) -->
+                            <tr class="bg-slate-950/60 font-bold text-amber-400 text-xs"><td colspan="4" class="py-1.5 px-1">🪵 Vinification (Cuvée Protocol)</td></tr>
+                            ${fieldRow('Fermentation Vessel', 'vinif', 'fermentation_vessel', proposed.vinification.fermentation_vessel, current.vinification.fermentation_vessel)}
+                            ${fieldRow('Yeast Selection', 'vinif', 'yeast_type', proposed.vinification.yeast_type, current.vinification.yeast_type)}
+                            ${fieldRow('Oak Barrels', 'vinif', 'oak_type', proposed.vinification.oak_type, current.vinification.oak_type)}
+                            ${fieldRow('New Oak %', 'vinif', 'new_oak_percent', proposed.vinification.new_oak_percent, current.vinification.new_oak_percent)}
+                            ${fieldRow('Aging Months', 'vinif', 'aging_months', proposed.vinification.aging_months, current.vinification.aging_months)}
+                            ${fieldRow('Malolactic Ferment.', 'vinif', 'malolactic_fermentation', proposed.vinification.malolactic_fermentation, current.vinification.malolactic_fermentation)}
+
+                            <!-- Vintage -->
+                            <tr class="bg-slate-950/60 font-bold text-amber-400 text-xs"><td colspan="4" class="py-1.5 px-1">🍇 Vintage</td></tr>
+                            ${fieldRow('ABV %', 'vint', 'abv', proposed.vintage.abv, current.vintage.abv)}
+                            ${fieldRow('Window Start', 'vint', 'drinking_window_start', proposed.vintage.drinking_window_start, current.vintage.drinking_window_start)}
+                            ${fieldRow('Window End', 'vint', 'drinking_window_end', proposed.vintage.drinking_window_end, current.vintage.drinking_window_end)}
+                            ${fieldRow('Weather Summary', 'vint', 'weather_summary', proposed.vintage.weather_summary, current.vintage.weather_summary)}
+                        </tbody>
+                    </table>
+                </div>
+
+                ${unmappedHtml}
+            `;
+        }
+
+        async function acceptModalProposal() {
+            if (!activeProposalId) return;
+            const appendUnmapped = document.getElementById('appendUnmappedCheckbox') ? document.getElementById('appendUnmappedCheckbox').checked : false;
+
+            try {
+                const res = await fetch(`/api/proposals/${activeProposalId}/accept`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ append_unmapped_to_notes: appendUnmapped })
+                });
+                if (res.ok) {
+                    alert('✓ Proposal accepted and committed to database!');
+                    closeProposalModal();
+                    if (currentWineId) openWineDetail(currentWineId);
+                } else {
+                    const err = await res.json();
+                    alert('Failed to accept proposal: ' + err.detail);
+                }
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
+        }
+
+        // ===================================================================
+        // JOURNAL VIEW
+        // ===================================================================
+        async function loadJournalEntries() {
+            const list = document.getElementById('journalEntriesList');
+            const empty = document.getElementById('journalEmpty');
+            list.innerHTML = '<div class="text-center py-8 text-slate-500">Loading journal...</div>';
+
+            try {
+                const res = await fetch('/api/journal');
+                const entries = await res.json();
+
+                if (!entries || entries.length === 0) {
+                    list.innerHTML = '';
+                    empty.classList.remove('hidden');
+                    return;
+                }
+                empty.classList.add('hidden');
+
+                list.innerHTML = entries.map(e => {
+                    const tp = e.tasting_profile;
+                    const pred = e.vintage.predicted_profile;
+
+                    return `
+                        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-xl">
+                            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800/80 pb-3">
+                                <div>
+                                    <h3 onclick="openWineDetail(${e.wine.id})" class="text-base font-bold text-amber-400 hover:underline cursor-pointer">
+                                        ${e.wine.name} (${e.vintage.year || 'NV'})
+                                    </h3>
+                                    <p class="text-xs text-slate-400">${e.wine.producer_name} • ${e.wine.appellation || e.wine.region}</p>
+                                </div>
+                                <div class="flex items-center gap-3">
+                                    <span class="text-xs text-slate-400">${new Date(e.drank_at).toLocaleDateString()}</span>
+                                    <span class="bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2.5 py-0.5 rounded font-bold text-xs">★ ${e.personal_rating || '—'}/10</span>
+                                </div>
+                            </div>
+
+                            <div class="text-xs text-slate-300 leading-relaxed">${e.user_notes || 'No written tasting notes.'}</div>
+
+                            <!-- Side-by-side comparison if predicted profile is present -->
+                            ${pred ? `
+                                <div class="bg-slate-950 p-3.5 rounded-xl border border-slate-800 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                                    <div class="space-y-1">
+                                        <span class="font-bold text-amber-400">🤖 Research Predicted:</span>
+                                        <p class="text-slate-400">${pred.structure_notes || (pred.palate || []).join(', ')}</p>
+                                    </div>
+                                    <div class="space-y-1">
+                                        <span class="font-bold text-emerald-400">🍷 Your Perception:</span>
+                                        <p class="text-slate-400">${tp ? `Tannin: ${tp.palate_tannin || '—'} | Acidity: ${tp.palate_acidity || '—'} | Finish: ${tp.palate_finish || '—'}` : 'WSET indicators not logged'}</p>
+                                    </div>
+                                </div>
+                            ` : ''}
+
+                            <div class="flex items-center gap-4 text-[11px] text-slate-500 pt-2 border-t border-slate-800/60">
+                                <span>📍 ${e.location_name || 'Home'}</span>
+                                ${e.occasion ? `<span>🎉 ${e.occasion}</span>` : ''}
+                                ${e.price_paid ? `<span>💵 $${e.price_paid.toFixed(2)}</span>` : ''}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+            } catch (err) {
+                list.innerHTML = `<div class="text-rose-400">Failed to load journal: ${err.message}</div>`;
+            }
+        }
+
+        // ===================================================================
+        // ADD A WINE VIEW (Upload, SSE Research, Extract, Save Entry, Chat)
+        // ===================================================================
         document.getElementById('uploadForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const fileInput = document.getElementById('labelFile');
@@ -163,23 +967,42 @@
                 const data = await res.json();
 
                 currentVintageId = data.vintage_id;
+                currentWineId = data.wine_id;
                 document.getElementById('vintageIdInput').value = currentVintageId;
+
+                // Producer Reuse Banner
+                const banner = document.getElementById('producerReuseBanner');
+                if (data.producer_reused) {
+                    document.getElementById('reusedProducerName').innerText = data.producer_name;
+                    banner.classList.remove('hidden');
+                } else {
+                    banner.classList.add('hidden');
+                }
+
+                // Skip producer option
+                const skipOpt = document.getElementById('skipProducerOption');
+                if (data.producer_already_researched) {
+                    skipOpt.classList.remove('hidden');
+                } else {
+                    skipOpt.classList.add('hidden');
+                }
 
                 // Show Summary
                 const ocr = data.ocr_extracted;
                 document.getElementById('ocrSummary').innerHTML = `
-          <div><span class="text-slate-500">Producer:</span> <br><strong>${ocr.producer}</strong></div>
-          <div><span class="text-slate-500">Wine:</span> <br><strong>${ocr.wine_name}</strong></div>
-          <div><span class="text-slate-500">Vintage:</span> <br><strong>${ocr.vintage || 'NV'}</strong></div>
-          <div><span class="text-slate-500">Region:</span> <br><strong>${ocr.region || 'N/A'}</strong></div>
-        `;
+                    <div><span class="text-slate-500">Producer:</span><br><strong>${ocr.producer}</strong></div>
+                    <div><span class="text-slate-500">Wine:</span><br><strong>${ocr.wine_name}</strong></div>
+                    <div><span class="text-slate-500">Vintage:</span><br><strong>${ocr.vintage || 'NV'}</strong></div>
+                    <div><span class="text-slate-500">Region:</span><br><strong>${ocr.region || 'N/A'}</strong></div>
+                `;
 
                 document.getElementById('agentSection').classList.remove('hidden');
                 document.getElementById('journalSection').classList.remove('hidden');
                 document.getElementById('chatSection').classList.remove('hidden');
 
-                // Trigger SSE Research Agent Stream
-                startAgentResearchStream(currentVintageId);
+                // Trigger SSE Research Stream
+                const skip = document.getElementById('skipProducerCheckbox') ? document.getElementById('skipProducerCheckbox').checked : false;
+                startAgentResearchStream(currentVintageId, skip);
 
             } catch (err) {
                 alert('Error parsing label: ' + err.message);
@@ -189,10 +1012,10 @@
             }
         });
 
-        // Stream SSE Progress
-        function startAgentResearchStream(vintageId) {
+        function startAgentResearchStream(vintageId, skipProducer = false) {
             const logDiv = document.getElementById('statusLog');
-            const eventSource = new EventSource(`/api/journal/research-stream/${vintageId}`);
+            logDiv.innerHTML = '<div>⏳ Launching research stream...</div>';
+            const eventSource = new EventSource(`/api/journal/research-stream/${vintageId}?skip_producer=${skipProducer}`);
 
             eventSource.onmessage = (event) => {
                 const data = JSON.parse(event.data);
@@ -202,11 +1025,11 @@
                 } else if (data.status === 'completed') {
                     logDiv.innerHTML += `<div class="text-emerald-400">✅ Research agent finished successfully!</div>`;
                     document.getElementById('agentBadge').innerText = 'Research Ready';
-                    document.getElementById('agentBadge').className = 'text-xs bg-emerald-500/20 text-emerald-400 px-2.5 py-1 rounded-full';
+                    document.getElementById('agentBadge').className = 'text-xs bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full border border-emerald-500/30';
 
                     const reportContainer = document.getElementById('researchReportContainer');
                     reportContainer.innerHTML = marked.parse(data.markdown);
-                    reportContainer.classList.remove('hidden');
+                    document.getElementById('extractActions').classList.remove('hidden');
 
                     eventSource.close();
                 }
@@ -215,6 +1038,77 @@
             eventSource.onerror = () => {
                 eventSource.close();
             };
+        }
+
+        function toggleMarkdownReport() {
+            const el = document.getElementById('researchReportContainer');
+            el.classList.toggle('hidden');
+        }
+
+        async function runExtraction() {
+            if (!currentVintageId) return;
+            const btn = document.getElementById('extractDossierBtn');
+            btn.innerText = 'Extracting Facts with Gemini...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch(`/api/vintages/${currentVintageId}/extract`, { method: 'POST' });
+                const proposal = await res.json();
+                activeProposalId = proposal.proposal_id;
+                currentProposal = proposal;
+
+                renderProposalForm(proposal, 'proposalFormContent');
+                document.getElementById('proposalSection').classList.remove('hidden');
+                document.getElementById('proposalSection').scrollIntoView({ behavior: 'smooth' });
+            } catch (err) {
+                alert('Extraction failed: ' + err.message);
+            } finally {
+                btn.innerText = '✨ Extract & Populate Structured Database Tables';
+                btn.disabled = false;
+            }
+        }
+
+        async function acceptCurrentProposal() {
+            if (!activeProposalId) return;
+            const appendUnmapped = document.getElementById('appendUnmappedCheckbox') ? document.getElementById('appendUnmappedCheckbox').checked : false;
+
+            try {
+                const res = await fetch(`/api/proposals/${activeProposalId}/accept`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ append_unmapped_to_notes: appendUnmapped })
+                });
+                if (res.ok) {
+                    alert('✓ Structured facts successfully committed to database!');
+                    document.getElementById('proposalSection').classList.add('hidden');
+                    // Prepopulate predicted profile preview in tasting form
+                    if (currentProposal && currentProposal.proposed && currentProposal.proposed.predicted_profile) {
+                        const pred = currentProposal.proposed.predicted_profile;
+                        const summaryEl = document.getElementById('predictedProfileSummary');
+                        summaryEl.innerHTML = `
+                            <div><strong>Aromatics:</strong> ${(pred.nose || []).join(', ')}</div>
+                            <div><strong>Palate:</strong> ${(pred.palate || []).join(', ')}</div>
+                        `;
+                        document.getElementById('predictedVsActualPreview').classList.remove('hidden');
+                    }
+                } else {
+                    const err = await res.json();
+                    alert('Accept failed: ' + err.detail);
+                }
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
+        }
+
+        async function rejectCurrentProposal() {
+            if (!activeProposalId) return;
+            try {
+                await fetch(`/api/proposals/${activeProposalId}/reject`, { method: 'POST' });
+                document.getElementById('proposalSection').classList.add('hidden');
+                alert('Proposal rejected.');
+            } catch (err) {
+                alert('Error: ' + err.message);
+            }
         }
 
         // Save Tasting Entry
@@ -238,6 +1132,7 @@
 
             if (res.ok) {
                 alert('🍷 Tasting memory saved to your journal!');
+                switchView('cellar');
             }
         });
 
@@ -260,6 +1155,9 @@
             history.innerHTML += `<div class="text-slate-200 bg-slate-900 p-2.5 rounded-lg border border-slate-800">🍷 <strong>Sommelier AI:</strong> ${data.response}</div>`;
             history.scrollTop = history.scrollHeight;
         });
+
+        // Initial Load
+        loadCellarWines();
     </script>
 </body>
 
