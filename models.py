@@ -63,8 +63,10 @@ class Producer(Base):
     region: Mapped[str] = mapped_column(String(150), nullable=False)
     subregion: Mapped[Optional[str]] = mapped_column(String(150))
     farming_practices: Mapped[Optional[FarmingPractice]] = mapped_column(SQLEnum(FarmingPractice))
+    certifications: Mapped[Optional[List[str]]] = mapped_column(JSON)
     website_url: Mapped[Optional[str]] = mapped_column(String(500))
     winemaker_philosophy: Mapped[Optional[str]] = mapped_column(Text)
+    history_md: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     wines: Mapped[List["Wine"]] = relationship("Wine", back_populates="producer", cascade="all, delete-orphan")
@@ -84,6 +86,8 @@ class Wine(Base):
 
     producer: Mapped["Producer"] = relationship("Producer", back_populates="wines")
     vintages: Mapped[List["Vintage"]] = relationship("Vintage", back_populates="wine", cascade="all, delete-orphan")
+    terroir: Mapped[Optional["Terroir"]] = relationship("Terroir", uselist=False, back_populates="wine", cascade="all, delete-orphan")
+    vinification: Mapped[Optional["Vinification"]] = relationship("Vinification", uselist=False, back_populates="wine", cascade="all, delete-orphan")
 
 
 class GrapeVarietal(Base):
@@ -118,37 +122,37 @@ class Vintage(Base):
     production_volume_cases: Mapped[Optional[int]] = mapped_column(Integer)
     drinking_window_start: Mapped[Optional[int]] = mapped_column(Integer)
     drinking_window_end: Mapped[Optional[int]] = mapped_column(Integer)
+    weather_summary: Mapped[Optional[str]] = mapped_column(Text)
+    predicted_profile_json: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON)
 
     wine: Mapped["Wine"] = relationship("Wine", back_populates="vintages")
-    blends: Mapped[List["WineBlend"]] = relationship("WineBlend", back_populates="vintage")
-    terroir: Mapped[Optional["Terroir"]] = relationship("Terroir", uselist=False, back_populates="vintage")
-    vinification: Mapped[Optional["Vinification"]] = relationship("Vinification", uselist=False, back_populates="vintage")
+    blends: Mapped[List["WineBlend"]] = relationship("WineBlend", back_populates="vintage", cascade="all, delete-orphan")
     vivino_data: Mapped[Optional["VivinoMetadata"]] = relationship("VivinoMetadata", uselist=False, back_populates="vintage")
     research_corpus: Mapped[Optional["ResearchCorpus"]] = relationship("ResearchCorpus", uselist=False, back_populates="vintage")
     journal_entries: Mapped[List["JournalEntry"]] = relationship("JournalEntry", back_populates="vintage")
+    proposals: Mapped[List["DossierProposal"]] = relationship("DossierProposal", back_populates="vintage", cascade="all, delete-orphan")
 
 
 class Terroir(Base):
-    """Vineyard microclimate, soil, and geography."""
+    """Vineyard microclimate, soil, and geography associated with the wine parcels."""
     __tablename__ = "terroirs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    vintage_id: Mapped[int] = mapped_column(ForeignKey("vintages.id"), unique=True, nullable=False)
+    wine_id: Mapped[int] = mapped_column(ForeignKey("wines.id"), unique=True, nullable=False)
     single_vineyard_name: Mapped[Optional[str]] = mapped_column(String(150))
-    soil_types: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON)  # ["limestone", "marne", "gravel"]
+    soil_types: Mapped[Optional[List[str]]] = mapped_column(JSON)  # ["limestone", "marne", "gravel"]
     elevation_meters: Mapped[Optional[float]] = mapped_column(Float)
     aspect: Mapped[Optional[str]] = mapped_column(String(50))  # e.g., "South-facing 15% slope"
-    climate_summary: Mapped[Optional[str]] = mapped_column(Text)
 
-    vintage: Mapped["Vintage"] = relationship("Vintage", back_populates="terroir")
+    wine: Mapped["Wine"] = relationship("Wine", back_populates="terroir")
 
 
 class Vinification(Base):
-    """Winemaking techniques, fermentation, and aging details."""
+    """Winemaking techniques, fermentation, and aging details for the cuvée."""
     __tablename__ = "vinifications"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    vintage_id: Mapped[int] = mapped_column(ForeignKey("vintages.id"), unique=True, nullable=False)
+    wine_id: Mapped[int] = mapped_column(ForeignKey("wines.id"), unique=True, nullable=False)
     fermentation_vessel: Mapped[Optional[str]] = mapped_column(String(100))  # Stainless, Concrete egg, Oak
     yeast_type: Mapped[Optional[str]] = mapped_column(String(50))  # Ambient / Wild vs Cultured
     oak_type: Mapped[Optional[str]] = mapped_column(String(100))  # French, American, Slavonian
@@ -157,7 +161,7 @@ class Vinification(Base):
     malolactic_fermentation: Mapped[Optional[bool]] = mapped_column(Boolean)
     filtration_notes: Mapped[Optional[str]] = mapped_column(String(255))
 
-    vintage: Mapped["Vintage"] = relationship("Vintage", back_populates="vinification")
+    wine: Mapped["Wine"] = relationship("Wine", back_populates="vinification")
 
 
 class VivinoMetadata(Base):
@@ -194,9 +198,24 @@ class ResearchCorpus(Base):
     vintage_weather_report_md: Mapped[Optional[str]] = mapped_column(Text)
     winemaking_tech_sheet_md: Mapped[Optional[str]] = mapped_column(Text)
     full_research_markdown: Mapped[str] = mapped_column(Text, nullable=False)
+    sources_json: Mapped[Optional[List[str]]] = mapped_column(JSON)
     last_researched_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     vintage: Mapped["Vintage"] = relationship("Vintage", back_populates="research_corpus")
+
+
+class DossierProposal(Base):
+    """Structured extraction proposal awaiting human-in-the-loop review."""
+    __tablename__ = "dossier_proposals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    vintage_id: Mapped[int] = mapped_column(ForeignKey("vintages.id"), nullable=False, index=True)
+    proposal_json: Mapped[Dict[str, Any]] = mapped_column(JSON, nullable=False)
+    status: Mapped[str] = mapped_column(String(50), default="pending", nullable=False)  # pending, accepted, rejected
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+    vintage: Mapped["Vintage"] = relationship("Vintage", back_populates="proposals")
 
 
 class JournalEntry(Base):
@@ -218,7 +237,7 @@ class JournalEntry(Base):
     user_notes: Mapped[Optional[str]] = mapped_column(Text)
 
     vintage: Mapped["Vintage"] = relationship("Vintage", back_populates="journal_entries")
-    tasting_profile: Mapped[Optional["TastingProfile"]] = relationship("TastingProfile", uselist=False, back_populates="journal_entry")
+    tasting_profile: Mapped[Optional["TastingProfile"]] = relationship("TastingProfile", uselist=False, back_populates="journal_entry", cascade="all, delete-orphan")
 
 
 class TastingProfile(Base):
@@ -239,7 +258,7 @@ class TastingProfile(Base):
     palate_body: Mapped[Optional[WSETIntensity]] = mapped_column(SQLEnum(WSETIntensity))
     palate_finish: Mapped[Optional[WSETIntensity]] = mapped_column(SQLEnum(WSETIntensity))
     
-    aroma_descriptors: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON)  # {"primary": ["black cherry"], "secondary": ["vanilla"], "tertiary": ["leather"]}
+    aroma_descriptors: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON)
     overall_quality: Mapped[Optional[WSETQuality]] = mapped_column(SQLEnum(WSETQuality))
 
     journal_entry: Mapped["JournalEntry"] = relationship("JournalEntry", back_populates="tasting_profile")
@@ -258,5 +277,5 @@ class SchemaOrgWine(BaseModel):
     wineType: Optional[str] = None
     alcoholByVolume: Optional[float] = None
 
-    def to_json_ld() -> Dict[str, Any]:
+    def to_json_ld(self) -> Dict[str, Any]:
         return self.model_dump(by_alias=True, exclude_none=True)

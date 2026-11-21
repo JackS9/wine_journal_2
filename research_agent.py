@@ -5,7 +5,7 @@ Executes parallel multi-domain search tasks using Gemini Grounding & Search Tool
 
 import os
 import asyncio
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from pydantic import BaseModel, Field
 from google import genai
 from google.genai import types
@@ -17,7 +17,7 @@ from google.genai import types
 class ResearchDomainResult(BaseModel):
     domain_name: str
     summary_md: str
-    sources_found: list[str] = Field(default_factory=list)
+    sources_found: List[str] = Field(default_factory=list)
 
 
 class DeepWineResearchReport(BaseModel):
@@ -26,6 +26,7 @@ class DeepWineResearchReport(BaseModel):
     vinification_and_aging: ResearchDomainResult
     appellation_and_varietal: ResearchDomainResult
     full_compiled_markdown: str
+    all_sources: List[str] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -98,21 +99,26 @@ class WineResearchAgent:
         wine_name: str,
         vintage: Optional[int] = None,
         region: Optional[str] = None,
-        appellation: Optional[str] = None
+        appellation: Optional[str] = None,
+        skip_producer: bool = False
     ) -> DeepWineResearchReport:
         """
-        Launches 4 parallel async research tasks across all core wine dimensions.
+        Launches parallel async research tasks across core wine dimensions.
+        Supports skipping domain 1 if the producer is already documented.
         """
         vintage_str = str(vintage) if vintage else "Non-Vintage"
         wine_identifier = f"{producer} {wine_name} {vintage_str}".strip()
-        print(f"\n🚀 Launching Autonomous Agentic Deep-Research for: '{wine_identifier}'\n")
+        print(f"\n🚀 Launching Autonomous Agentic Deep-Research for: '{wine_identifier}' (skip_producer={skip_producer})\n")
 
         # Define 4 distinct domain search prompts
-        task_1 = self._research_domain(
-            domain_name="Producer & Winemaker Philosophy",
-            prompt=f"Research the winery '{producer}'. Detail its founding history, key winemakers, estate vs. negociant fruit, and farming philosophy (e.g., organic, biodynamic, sustainable, or conventional practices).",
-            search_query=f"{producer} winery history winemaker biodynamic philosophy"
-        )
+        if not skip_producer:
+            task_1 = self._research_domain(
+                domain_name="Producer & Winemaker Philosophy",
+                prompt=f"Research the winery '{producer}'. Detail its founding history, key winemakers, estate vs. negociant fruit, and farming philosophy (e.g., organic, biodynamic, sustainable, or conventional practices).",
+                search_query=f"{producer} winery history winemaker biodynamic philosophy"
+            )
+        else:
+            task_1 = None
 
         task_2 = self._research_domain(
             domain_name="Terroir, Soil & Vintage Climate",
@@ -132,8 +138,15 @@ class WineResearchAgent:
             search_query=f"{producer} {wine_name} grape blend percentage {appellation or region} classification"
         )
 
-        # Run all 4 tasks concurrently using asyncio.gather
-        p_res, t_res, v_res, a_res = await asyncio.gather(task_1, task_2, task_3, task_4)
+        if not skip_producer:
+            p_res, t_res, v_res, a_res = await asyncio.gather(task_1, task_2, task_3, task_4)
+        else:
+            t_res, v_res, a_res = await asyncio.gather(task_2, task_3, task_4)
+            p_res = ResearchDomainResult(
+                domain_name="Producer & Winemaker Philosophy",
+                summary_md="*Note: Producer research skipped — estate history and philosophy are already populated from prior research.*",
+                sources_found=[]
+            )
 
         # Compile master Markdown document
         compiled_markdown = f"""# Deep Research Dossier: {wine_identifier}
@@ -160,8 +173,8 @@ class WineResearchAgent:
 
 ## Verified Research Sources
 """
-        all_sources = set(p_res.sources_found + t_res.sources_found + v_res.sources_found + a_res.sources_found)
-        for src in sorted(all_sources):
+        all_sources = sorted(list(set(p_res.sources_found + t_res.sources_found + v_res.sources_found + a_res.sources_found)))
+        for src in all_sources:
             compiled_markdown += f"- [{src}]({src})\n"
 
         return DeepWineResearchReport(
@@ -169,25 +182,6 @@ class WineResearchAgent:
             terroir_and_climate=t_res,
             vinification_and_aging=v_res,
             appellation_and_varietal=a_res,
-            full_compiled_markdown=compiled_markdown
+            full_compiled_markdown=compiled_markdown,
+            all_sources=all_sources
         )
-
-
-# ---------------------------------------------------------------------------
-# Test Runner
-# ---------------------------------------------------------------------------
-
-if __name__ == "__main__":
-    async def main():
-        agent = WineResearchAgent()
-        report = await agent.conduct_deep_research(
-            producer="Tenuta San Guido",
-            wine_name="Sassicaia",
-            vintage=2018,
-            region="Tuscany",
-            appellation="Bolgheri Sassicaia DOC"
-        )
-        print("\n================ COMPILED RESEARCH REPORT ================\n")
-        print(report.full_compiled_markdown[:2000] + "\n\n[... truncated for preview ...]")
-
-    asyncio.run(main())
