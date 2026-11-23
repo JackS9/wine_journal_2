@@ -39,57 +39,69 @@ def migrate_database(db_path: str = "wine_journal.db") -> Dict[str, Any]:
     before_counts = get_table_counts(conn)
     print(f"Counts before migration: {before_counts}")
 
-    # 1. Fetch existing terroirs and map to wine_id
-    cursor.execute("""
-        SELECT t.*, v.wine_id 
-        FROM terroirs t
-        JOIN vintages v ON t.vintage_id = v.id
-        ORDER BY t.id ASC
-    """)
-    existing_terroirs = [dict(row) for row in cursor.fetchall()]
-
-    # Group by wine_id to handle sibling collisions
-    terroirs_by_wine: Dict[int, List[Dict[str, Any]]] = {}
-    for t in existing_terroirs:
-        w_id = t["wine_id"]
-        terroirs_by_wine.setdefault(w_id, []).append(t)
+    # 1. Fetch existing terroirs and map to wine_id (if not yet migrated to wine_id)
+    cursor.execute("PRAGMA table_info(terroirs);")
+    terroir_cols = {col["name"] for col in cursor.fetchall()}
+    needs_terroir_migration = "vintage_id" in terroir_cols
 
     kept_terroirs: List[Dict[str, Any]] = []
     discarded_terroirs: List[Dict[str, Any]] = []
+    existing_terroirs: List[Dict[str, Any]] = []
 
-    for w_id, t_list in terroirs_by_wine.items():
-        # Keep most recently created (highest ID)
-        t_sorted = sorted(t_list, key=lambda x: x["id"])
-        chosen = t_sorted[-1]
-        kept_terroirs.append(chosen)
-        if len(t_sorted) > 1:
-            for discarded in t_sorted[:-1]:
-                discarded_terroirs.append(discarded)
+    if needs_terroir_migration:
+        cursor.execute("""
+            SELECT t.*, v.wine_id 
+            FROM terroirs t
+            JOIN vintages v ON t.vintage_id = v.id
+            ORDER BY t.id ASC
+        """)
+        existing_terroirs = [dict(row) for row in cursor.fetchall()]
 
-    # 2. Fetch existing vinifications and map to wine_id
-    cursor.execute("""
-        SELECT vinf.*, v.wine_id 
-        FROM vinifications vinf
-        JOIN vintages v ON vinf.vintage_id = v.id
-        ORDER BY vinf.id ASC
-    """)
-    existing_vinifications = [dict(row) for row in cursor.fetchall()]
+        # Group by wine_id to handle sibling collisions
+        terroirs_by_wine: Dict[int, List[Dict[str, Any]]] = {}
+        for t in existing_terroirs:
+            w_id = t["wine_id"]
+            terroirs_by_wine.setdefault(w_id, []).append(t)
 
-    vinifications_by_wine: Dict[int, List[Dict[str, Any]]] = {}
-    for v in existing_vinifications:
-        w_id = v["wine_id"]
-        vinifications_by_wine.setdefault(w_id, []).append(v)
+        for w_id, t_list in terroirs_by_wine.items():
+            # Keep most recently created (highest ID)
+            t_sorted = sorted(t_list, key=lambda x: x["id"])
+            chosen = t_sorted[-1]
+            kept_terroirs.append(chosen)
+            if len(t_sorted) > 1:
+                for discarded in t_sorted[:-1]:
+                    discarded_terroirs.append(discarded)
+
+    # 2. Fetch existing vinifications and map to wine_id (if not yet migrated to wine_id)
+    cursor.execute("PRAGMA table_info(vinifications);")
+    vinif_cols = {col["name"] for col in cursor.fetchall()}
+    needs_vinif_migration = "vintage_id" in vinif_cols
 
     kept_vinifications: List[Dict[str, Any]] = []
     discarded_vinifications: List[Dict[str, Any]] = []
+    existing_vinifications: List[Dict[str, Any]] = []
 
-    for w_id, v_list in vinifications_by_wine.items():
-        v_sorted = sorted(v_list, key=lambda x: x["id"])
-        chosen = v_sorted[-1]
-        kept_vinifications.append(chosen)
-        if len(v_sorted) > 1:
-            for discarded in v_sorted[:-1]:
-                discarded_vinifications.append(discarded)
+    if needs_vinif_migration:
+        cursor.execute("""
+            SELECT vinf.*, v.wine_id 
+            FROM vinifications vinf
+            JOIN vintages v ON vinf.vintage_id = v.id
+            ORDER BY vinf.id ASC
+        """)
+        existing_vinifications = [dict(row) for row in cursor.fetchall()]
+
+        vinifications_by_wine: Dict[int, List[Dict[str, Any]]] = {}
+        for v in existing_vinifications:
+            w_id = v["wine_id"]
+            vinifications_by_wine.setdefault(w_id, []).append(v)
+
+        for w_id, v_list in vinifications_by_wine.items():
+            v_sorted = sorted(v_list, key=lambda x: x["id"])
+            chosen = v_sorted[-1]
+            kept_vinifications.append(chosen)
+            if len(v_sorted) > 1:
+                for discarded in v_sorted[:-1]:
+                    discarded_vinifications.append(discarded)
 
     # 3. Alter existing tables to add new columns if they do not exist
     # Producers: history_md (TEXT), certifications (JSON)
@@ -108,11 +120,19 @@ def migrate_database(db_path: str = "wine_journal.db") -> Dict[str, Any]:
     if "predicted_profile_json" not in vint_cols:
         cursor.execute("ALTER TABLE vintages ADD COLUMN predicted_profile_json JSON;")
 
-    # ResearchCorpora: sources_json (JSON)
+    # ResearchCorpora: sources_json (JSON), provenance (VARCHAR(50))
     cursor.execute("PRAGMA table_info(research_corpora);")
     corp_cols = {col["name"] for col in cursor.fetchall()}
     if "sources_json" not in corp_cols:
         cursor.execute("ALTER TABLE research_corpora ADD COLUMN sources_json JSON;")
+    if "provenance" not in corp_cols:
+        cursor.execute("ALTER TABLE research_corpora ADD COLUMN provenance VARCHAR(50) DEFAULT 'label_scan';")
+
+    # JournalEntries: provenance (VARCHAR(50))
+    cursor.execute("PRAGMA table_info(journal_entries);")
+    journal_cols = {col["name"] for col in cursor.fetchall()}
+    if "provenance" not in journal_cols:
+        cursor.execute("ALTER TABLE journal_entries ADD COLUMN provenance VARCHAR(50) DEFAULT 'label_scan';")
 
     # 4. Create dossier_proposals table
     cursor.execute("""
@@ -128,72 +148,74 @@ def migrate_database(db_path: str = "wine_journal.db") -> Dict[str, Any]:
     """)
     cursor.execute("CREATE INDEX IF NOT EXISTS ix_dossier_proposals_vintage_id ON dossier_proposals (vintage_id);")
 
-    # 5. Recreate terroirs table with wine_id (dropping climate_summary)
-    cursor.execute("""
-        CREATE TABLE terroirs_new (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            wine_id INTEGER NOT NULL UNIQUE,
-            single_vineyard_name VARCHAR(150),
-            soil_types JSON,
-            elevation_meters FLOAT,
-            aspect VARCHAR(50),
-            FOREIGN KEY (wine_id) REFERENCES wines (id) ON DELETE CASCADE
-        );
-    """)
-
-    for t in kept_terroirs:
+    # 5. Recreate terroirs table with wine_id (dropping climate_summary) if needed
+    if needs_terroir_migration:
         cursor.execute("""
-            INSERT INTO terroirs_new (wine_id, single_vineyard_name, soil_types, elevation_meters, aspect)
-            VALUES (?, ?, ?, ?, ?)
-        """, (
-            t["wine_id"],
-            t.get("single_vineyard_name"),
-            t.get("soil_types"),
-            t.get("elevation_meters"),
-            t.get("aspect")
-        ))
+            CREATE TABLE terroirs_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                wine_id INTEGER NOT NULL UNIQUE,
+                single_vineyard_name VARCHAR(150),
+                soil_types JSON,
+                elevation_meters FLOAT,
+                aspect VARCHAR(50),
+                FOREIGN KEY (wine_id) REFERENCES wines (id) ON DELETE CASCADE
+            );
+        """)
 
-    cursor.execute("DROP TABLE terroirs;")
-    cursor.execute("ALTER TABLE terroirs_new RENAME TO terroirs;")
-    cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_terroirs_wine_id ON terroirs (wine_id);")
+        for t in kept_terroirs:
+            cursor.execute("""
+                INSERT INTO terroirs_new (wine_id, single_vineyard_name, soil_types, elevation_meters, aspect)
+                VALUES (?, ?, ?, ?, ?)
+            """, (
+                t["wine_id"],
+                t.get("single_vineyard_name"),
+                t.get("soil_types"),
+                t.get("elevation_meters"),
+                t.get("aspect")
+            ))
 
-    # 6. Recreate vinifications table with wine_id
-    cursor.execute("""
-        CREATE TABLE vinifications_new (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            wine_id INTEGER NOT NULL UNIQUE,
-            fermentation_vessel VARCHAR(100),
-            yeast_type VARCHAR(50),
-            oak_type VARCHAR(100),
-            new_oak_percent FLOAT,
-            aging_months INTEGER,
-            malolactic_fermentation BOOLEAN,
-            filtration_notes VARCHAR(255),
-            FOREIGN KEY (wine_id) REFERENCES wines (id) ON DELETE CASCADE
-        );
-    """)
+        cursor.execute("DROP TABLE terroirs;")
+        cursor.execute("ALTER TABLE terroirs_new RENAME TO terroirs;")
+        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_terroirs_wine_id ON terroirs (wine_id);")
 
-    for v in kept_vinifications:
+    # 6. Recreate vinifications table with wine_id if needed
+    if needs_vinif_migration:
         cursor.execute("""
-            INSERT INTO vinifications_new (
-                wine_id, fermentation_vessel, yeast_type, oak_type, new_oak_percent, 
-                aging_months, malolactic_fermentation, filtration_notes
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            v["wine_id"],
-            v.get("fermentation_vessel"),
-            v.get("yeast_type"),
-            v.get("oak_type"),
-            v.get("new_oak_percent"),
-            v.get("aging_months"),
-            v.get("malolactic_fermentation"),
-            v.get("filtration_notes")
-        ))
+            CREATE TABLE vinifications_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                wine_id INTEGER NOT NULL UNIQUE,
+                fermentation_vessel VARCHAR(100),
+                yeast_type VARCHAR(50),
+                oak_type VARCHAR(100),
+                new_oak_percent FLOAT,
+                aging_months INTEGER,
+                malolactic_fermentation BOOLEAN,
+                filtration_notes VARCHAR(255),
+                FOREIGN KEY (wine_id) REFERENCES wines (id) ON DELETE CASCADE
+            );
+        """)
 
-    cursor.execute("DROP TABLE vinifications;")
-    cursor.execute("ALTER TABLE vinifications_new RENAME TO vinifications;")
-    cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_vinifications_wine_id ON vinifications (wine_id);")
+        for v in kept_vinifications:
+            cursor.execute("""
+                INSERT INTO vinifications_new (
+                    wine_id, fermentation_vessel, yeast_type, oak_type, new_oak_percent, 
+                    aging_months, malolactic_fermentation, filtration_notes
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                v["wine_id"],
+                v.get("fermentation_vessel"),
+                v.get("yeast_type"),
+                v.get("oak_type"),
+                v.get("new_oak_percent"),
+                v.get("aging_months"),
+                v.get("malolactic_fermentation"),
+                v.get("filtration_notes")
+            ))
+
+        cursor.execute("DROP TABLE vinifications;")
+        cursor.execute("ALTER TABLE vinifications_new RENAME TO vinifications;")
+        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_vinifications_wine_id ON vinifications (wine_id);")
 
     conn.commit()
 

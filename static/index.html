@@ -38,6 +38,10 @@
                     class="px-4 py-1.5 rounded-lg transition text-slate-300 hover:text-white flex items-center gap-1.5">
                     <span>📖</span> Journal
                 </button>
+                <button id="nav-ask" onclick="switchView('ask')"
+                    class="px-4 py-1.5 rounded-lg transition text-slate-300 hover:text-white flex items-center gap-1.5">
+                    <span>💡</span> Ask & Research
+                </button>
                 <button id="nav-add" onclick="switchView('add')"
                     class="px-4 py-1.5 rounded-lg transition text-slate-300 hover:text-white flex items-center gap-1.5">
                     <span>➕</span> Add a Wine
@@ -324,6 +328,69 @@
             </div>
         </section>
 
+        <!-- ================================================================= -->
+        <!-- VIEW 5: ASK & RESEARCH (Natural-Language Query & Sourced Research) -->
+        <!-- ================================================================= -->
+        <section id="view-ask" class="hidden space-y-6">
+            <!-- Query Input Card -->
+            <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4">
+                <div>
+                    <h2 class="text-xl font-bold text-amber-400 flex items-center gap-2">
+                        <span>💡</span> Ask & Research
+                    </h2>
+                    <p class="text-xs text-slate-400 mt-1">
+                        Explore your journal entries, research new wines beyond your collection, or ask general questions about regions, terroir, and winemaking.
+                    </p>
+                </div>
+
+                <div class="flex flex-col sm:flex-row gap-2">
+                    <input type="text" id="askInput"
+                        onkeydown="if(event.key==='Enter') executeAskQuery();"
+                        placeholder="e.g. Which wines from Margaux have I had? / Tell me about Ridge Monte Bello 2019 / What does malolactic conversion do?"
+                        class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500">
+                    <button id="askSubmitBtn" onclick="executeAskQuery()"
+                        class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-6 py-3 rounded-xl text-sm transition flex items-center justify-center gap-2 shadow-lg shadow-amber-500/10 shrink-0">
+                        <span>🔍</span> Ask
+                    </button>
+                </div>
+
+                <!-- Quick Example Pills -->
+                <div class="pt-1">
+                    <p class="text-[11px] uppercase tracking-wider text-slate-500 font-semibold mb-2">Try an example:</p>
+                    <div class="flex flex-wrap gap-2 text-xs">
+                        <button onclick="fillAndAsk('Which wines from Margaux have I had?')"
+                            class="bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-800 hover:border-amber-500/40 px-3 py-1.5 rounded-lg transition">
+                            🍇 Which wines from Margaux have I had?
+                        </button>
+                        <button onclick="fillAndAsk('Which of my wines are at least 60% Cabernet Sauvignon?')"
+                            class="bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-800 hover:border-amber-500/40 px-3 py-1.5 rounded-lg transition">
+                            🍷 Which of my wines are ≥60% Cabernet Sauvignon?
+                        </button>
+                        <button onclick="fillAndAsk('Tell me about Ridge Monte Bello 2019')"
+                            class="bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-800 hover:border-amber-500/40 px-3 py-1.5 rounded-lg transition">
+                            🏔️ Tell me about Ridge Monte Bello 2019
+                        </button>
+                        <button onclick="fillAndAsk('What is the difference between a Margaux and a Pauillac in style?')"
+                            class="bg-slate-950 hover:bg-slate-800 text-slate-300 border border-slate-800 hover:border-amber-500/40 px-3 py-1.5 rounded-lg transition">
+                            🌿 Margaux vs Pauillac style difference?
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Loading State Indicator -->
+            <div id="askLoadingState" class="hidden bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center space-y-3 shadow-xl">
+                <div class="inline-block animate-spin text-2xl text-amber-400">⏳</div>
+                <h3 class="text-sm font-semibold text-slate-200" id="askLoadingTitle">Consulting Wine Knowledge...</h3>
+                <p class="text-xs text-slate-500" id="askLoadingDesc">Routing query and analyzing database / research sources...</p>
+            </div>
+
+            <!-- Result Card Container -->
+            <div id="askResultContainer" class="hidden space-y-4">
+                <!-- Dynamically populated by renderAskResult -->
+            </div>
+        </section>
+
     </main>
 
     <!-- Review Proposal Modal (Callable from Detail or Add flow) -->
@@ -354,17 +421,18 @@
         let activeProposalId = null;
         let readyToDrinkFilter = false;
         let searchTimeout = null;
+        let currentWineCandidate = null;
 
         // Navigation
         function switchView(viewName) {
             currentView = viewName;
-            ['cellar', 'detail', 'journal', 'add'].forEach(v => {
+            ['cellar', 'detail', 'journal', 'add', 'ask'].forEach(v => {
                 const el = document.getElementById(`view-${v}`);
                 if (el) el.classList.add('hidden');
             });
 
             // Update tab styles
-            ['cellar', 'journal', 'add'].forEach(v => {
+            ['cellar', 'journal', 'ask', 'add'].forEach(v => {
                 const btn = document.getElementById(`nav-${v}`);
                 if (btn) {
                     if (v === viewName || (viewName === 'detail' && v === 'cellar')) {
@@ -1165,6 +1233,290 @@
             history.innerHTML += `<div class="text-slate-200 bg-slate-900 p-2.5 rounded-lg border border-slate-800">🍷 <strong>Sommelier AI:</strong> ${data.response}</div>`;
             history.scrollTop = history.scrollHeight;
         });
+
+        // ===================================================================
+        // ASK & RESEARCH VIEW LOGIC (Paths A, B, and C)
+        // ===================================================================
+
+        function escapeHtml(str) {
+            if (str === null || str === undefined) return '';
+            return String(str)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        function formatMarkdown(text) {
+            if (!text) return '';
+            let escaped = escapeHtml(text);
+            // Bold **text**
+            escaped = escaped.replace(/\*\*(.*?)\*\*/g, '<strong class="text-amber-200 font-semibold">$1</strong>');
+            // Italic *text*
+            escaped = escaped.replace(/\*(.*?)\*/g, '<em class="text-slate-300">$1</em>');
+            // Inline code `code`
+            escaped = escaped.replace(/`([^`]+)`/g, '<code class="bg-slate-950 px-1.5 py-0.5 rounded text-amber-300 font-mono text-[11px] border border-slate-800">$1</code>');
+            // Paragraphs & bullet lists
+            return escaped.split('\n\n').map(p => {
+                let trimmed = p.trim();
+                if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+                    const items = trimmed.split('\n').map(line => line.replace(/^[-*]\s*/, '').trim()).filter(Boolean);
+                    return `<ul class="list-disc pl-5 space-y-1.5 my-2 text-slate-300">${items.map(it => `<li>${it}</li>`).join('')}</ul>`;
+                }
+                return `<p class="my-2.5 leading-relaxed text-slate-300">${trimmed.replace(/\n/g, '<br>')}</p>`;
+            }).join('');
+        }
+
+        function fillAndAsk(query) {
+            const input = document.getElementById('askInput');
+            if (input) input.value = query;
+            executeAskQuery(query);
+        }
+
+        function executePathBResearch(query) {
+            executeAskQuery(query, 'path_b');
+        }
+
+        async function executeAskQuery(forcedQuery = null, forcePath = null) {
+            const input = document.getElementById('askInput');
+            const query = (forcedQuery || (input ? input.value : '')).trim();
+            if (!query) return;
+
+            if (input) input.value = query;
+
+            const loadingState = document.getElementById('askLoadingState');
+            const resultContainer = document.getElementById('askResultContainer');
+            const submitBtn = document.getElementById('askSubmitBtn');
+            const loadingTitle = document.getElementById('askLoadingTitle');
+            const loadingDesc = document.getElementById('askLoadingDesc');
+
+            if (forcePath === 'path_b') {
+                loadingTitle.textContent = "Conducting Autonomous Deep Research...";
+                loadingDesc.textContent = "Querying multi-domain sources beyond your journal via Google Search & Gemini...";
+            } else {
+                loadingTitle.textContent = "Consulting Wine Knowledge...";
+                loadingDesc.textContent = "Routing query and analyzing database / research sources...";
+            }
+
+            loadingState.classList.remove('hidden');
+            resultContainer.classList.add('hidden');
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<span>⏳</span> Searching...';
+
+            try {
+                const res = await fetch('/api/ask', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: query, force_path: forcePath })
+                });
+
+                if (!res.ok) {
+                    const errData = await res.json();
+                    throw new Error(errData.detail || 'Failed to process question');
+                }
+
+                const data = await res.json();
+                renderAskResult(data);
+                resultContainer.classList.remove('hidden');
+            } catch (err) {
+                resultContainer.innerHTML = `
+                    <div class="bg-rose-950/40 border border-rose-500/40 rounded-2xl p-6 text-rose-300 space-y-2">
+                        <h4 class="font-bold flex items-center gap-2"><span>⚠️</span> Error Processing Request</h4>
+                        <p class="text-xs">${escapeHtml(err.message)}</p>
+                    </div>
+                `;
+                resultContainer.classList.remove('hidden');
+            } finally {
+                loadingState.classList.add('hidden');
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<span>🔍</span> Ask';
+                resultContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }
+
+        function renderAskResult(data) {
+            const container = document.getElementById('askResultContainer');
+            currentWineCandidate = null;
+
+            let pathBadge = '';
+            let detailsBlock = '';
+            let actionBlock = '';
+            let tableBlock = '';
+            let sourcesBlock = '';
+
+            if (data.path === 'path_a') {
+                pathBadge = `
+                    <span class="inline-flex items-center gap-1.5 bg-blue-950/80 text-blue-300 border border-blue-500/30 px-3 py-1 rounded-full text-xs font-semibold">
+                        <span>📊</span> Path A: Journal Query (Structured Database)
+                    </span>
+                `;
+
+                if (data.success && data.row_count > 0 && data.rows && data.rows.length > 0) {
+                    const headers = data.columns || Object.keys(data.rows[0]);
+                    tableBlock = `
+                        <div class="mt-4 border border-slate-800 rounded-xl overflow-hidden shadow-inner">
+                            <div class="bg-slate-950 px-4 py-2 text-xs font-semibold text-slate-400 border-b border-slate-800 flex items-center justify-between">
+                                <span>Returned Results</span>
+                                <span class="bg-blue-900/50 text-blue-300 px-2 py-0.5 rounded text-[10px]">${data.row_count} row${data.row_count === 1 ? '' : 's'}</span>
+                            </div>
+                            <div class="overflow-x-auto max-h-80 overflow-y-auto">
+                                <table class="w-full text-left text-xs">
+                                    <thead class="bg-slate-950 text-slate-400 border-b border-slate-800 sticky top-0">
+                                        <tr>
+                                            ${headers.map(h => `<th class="py-2.5 px-3 uppercase text-[10px] tracking-wider font-semibold">${escapeHtml(h)}</th>`).join('')}
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-800/60 font-mono text-[11px]">
+                                        ${data.rows.map(row => `
+                                            <tr class="hover:bg-slate-800/40 transition">
+                                                ${headers.map(h => `<td class="py-2 px-3 text-slate-200">${escapeHtml(row[h] !== null ? row[h] : '—')}</td>`).join('')}
+                                            </tr>
+                                        `).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                if (data.sql_query) {
+                    detailsBlock = `
+                        <details class="mt-4 bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs">
+                            <summary class="cursor-pointer text-slate-400 hover:text-amber-400 font-medium select-none flex items-center justify-between">
+                                <span>Show generated SQL query</span>
+                                <span class="text-[10px] text-slate-500 font-mono">SQLite mode=ro (LIMIT 50)</span>
+                            </summary>
+                            <pre class="mt-2 text-amber-300 font-mono text-[11px] bg-slate-900/90 p-3 rounded-lg overflow-x-auto leading-relaxed border border-slate-800/80">${escapeHtml(data.sql_query)}</pre>
+                            ${data.explanation ? `<p class="mt-2 text-[11px] text-slate-400 italic">${escapeHtml(data.explanation)}</p>` : ''}
+                        </details>
+                    `;
+                }
+
+                if (data.can_research_instead) {
+                    actionBlock = `
+                        <div class="mt-4 bg-amber-950/20 border border-amber-500/30 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div class="text-xs text-amber-200/90">
+                                <span class="font-semibold text-amber-300">Nothing in your journal matches this query.</span>
+                                <p class="text-slate-400 mt-0.5">Would you like to search beyond your journal to research this wine?</p>
+                            </div>
+                            <button onclick="executePathBResearch('${escapeHtml(data.suggested_query || '')}')"
+                                class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-4 py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 transition shrink-0 shadow-sm">
+                                <span>🔍</span> Research it instead
+                            </button>
+                        </div>
+                    `;
+                }
+            } else {
+                pathBadge = `
+                    <span class="inline-flex items-center gap-1.5 bg-purple-950/80 text-purple-300 border border-purple-500/30 px-3 py-1 rounded-full text-xs font-semibold">
+                        <span>🌐</span> Path B: Deep Wine Research (Beyond Database)
+                    </span>
+                `;
+
+                if (data.sources && data.sources.length > 0) {
+                    sourcesBlock = `
+                        <div class="mt-4 bg-slate-950 border border-slate-800 rounded-xl p-4 space-y-2">
+                            <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                                <span>📚</span> Verified Research Sources (${data.sources.length})
+                            </h4>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-1.5 max-h-48 overflow-y-auto pt-1">
+                                ${data.sources.map(s => `
+                                    <a href="${escapeHtml(s)}" target="_blank" rel="noopener noreferrer"
+                                        class="text-amber-400/80 hover:text-amber-300 hover:underline text-[11px] truncate block p-1 rounded hover:bg-slate-900 border border-transparent hover:border-slate-800">
+                                        🔗 ${escapeHtml(s)}
+                                    </a>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `;
+                }
+
+                if (data.can_save_to_journal && data.wine_candidate) {
+                    currentWineCandidate = data.wine_candidate;
+                    actionBlock = `
+                        <div class="mt-4 bg-emerald-950/30 border border-emerald-500/40 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div>
+                                <div class="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                                    <span>✨</span> Wine Discovered Beyond Your Collection
+                                </div>
+                                <p class="text-sm font-semibold text-slate-100 mt-1">
+                                    ${escapeHtml(data.wine_candidate.producer)} — ${escapeHtml(data.wine_candidate.wine_name)} (${data.wine_candidate.vintage || 'NV'})
+                                </p>
+                                <p class="text-xs text-slate-400 mt-0.5">
+                                    Save this wine and its structured facts into your journal via human-in-the-loop proposal review.
+                                </p>
+                            </div>
+                            <button id="saveCandidateBtn" onclick="saveResearchedWineToJournal()"
+                                class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-5 py-2.5 rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-500/20 shrink-0">
+                                <span>💾</span> Save to Journal
+                            </button>
+                        </div>
+                    `;
+                }
+            }
+
+            container.innerHTML = `
+                <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+                        ${pathBadge}
+                    </div>
+
+                    <div class="text-sm">
+                        ${formatMarkdown(data.answer)}
+                    </div>
+
+                    ${tableBlock}
+                    ${actionBlock}
+                    ${sourcesBlock}
+                    ${detailsBlock}
+                </div>
+            `;
+        }
+
+        async function saveResearchedWineToJournal() {
+            if (!currentWineCandidate) return;
+            const btn = document.getElementById('saveCandidateBtn');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<span>⏳</span> Extracting Proposal...';
+            }
+
+            try {
+                const res = await fetch('/api/ask/save-proposal', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        producer: currentWineCandidate.producer,
+                        wine_name: currentWineCandidate.wine_name,
+                        vintage: currentWineCandidate.vintage,
+                        dossier_markdown: currentWineCandidate.dossier_markdown,
+                        sources: currentWineCandidate.sources || []
+                    })
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail || 'Failed to create proposal');
+                }
+
+                const data = await res.json();
+                const proposal = data.proposal;
+                activeProposalId = proposal.proposal_id;
+                currentProposal = proposal;
+                currentWineId = proposal.wine_id;
+
+                document.getElementById('proposalModal').classList.remove('hidden');
+                renderProposalForm(proposal, 'modalProposalContent');
+            } catch (err) {
+                alert('Save to journal failed: ' + err.message);
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<span>💾</span> Save to Journal';
+                }
+            }
+        }
 
         // Initial Load
         loadCellarWines();
