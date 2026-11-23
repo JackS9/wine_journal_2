@@ -36,6 +36,7 @@ from models import (
 from vivino_pipeline import WineLabelIngestionPipeline
 from research_agent import WineResearchAgent
 from dossier_extractor import DossierExtractor, extract_dossier_from_corpus
+from ask_agent import AskResearchAgent, DetectedWine
 
 # Initialize FastAPI App
 app = FastAPI(title="AI Agentic Wine Journal", version="2.0")
@@ -56,6 +57,7 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 pipeline = WineLabelIngestionPipeline()
 research_agent = WineResearchAgent()
 dossier_extractor = DossierExtractor()
+ask_agent = AskResearchAgent(db_path=DB_PATH)
 
 # Static files
 app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
@@ -126,6 +128,19 @@ class AcceptProposalPayload(BaseModel):
     fields_accepted: Optional[Dict[str, Any]] = None
     append_unmapped_to_notes: bool = False
     chosen_conflicts: Optional[Dict[str, str]] = None
+
+
+class AskQueryRequest(BaseModel):
+    query: str
+    force_path: Optional[str] = None
+
+
+class SaveProposalRequest(BaseModel):
+    producer: str
+    wine_name: str
+    vintage: Optional[int] = None
+    dossier_markdown: str
+    sources: List[str] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -524,10 +539,14 @@ def accept_proposal_endpoint(proposal_id: int, payload: AcceptProposalPayload = 
         if wine_data.get("appellation"):
             wine.appellation = wine_data["appellation"]
         if wine_data.get("wine_type"):
-            try:
-                wine.wine_type = WineType(wine_data["wine_type"].lower())
-            except Exception:
-                pass
+            val_str = str(wine_data["wine_type"]).strip()
+            if val_str.upper() in WineType.__members__:
+                wine.wine_type = WineType[val_str.upper()]
+            else:
+                try:
+                    wine.wine_type = WineType(val_str.lower())
+                except Exception:
+                    pass
 
         # 3. Update or Create Terroir (on Wine)
         terroir_data = data.get("terroir", {})
@@ -1080,6 +1099,118 @@ async def chat_with_wine_assistant(query: ChatQuery):
         return {"response": response.text}
     finally:
         db.close()
+
+
+# ---------------------------------------------------------------------------
+# API Endpoints: Ask & Research (Paths A, B, and C)
+# ---------------------------------------------------------------------------
+
+@app.post("/api/ask")
+async def ask_and_research_endpoint(payload: AskQueryRequest):
+    """
+    Main entry point for Ask & Research:
+    Lightweight classification routes to Path A (Journal SQL) or Path B (Deep Research).
+    Zero rows in Path A returns can_research_instead=True for one-click follow-up.
+    """
+    if not payload.query or not payload.query.strip():
+        raise HTTPException(status_code=400, detail="Query cannot be empty")
+
+    query = payload.query.strip()
+
+    # 1. Route query
+    try:
+        routing = ask_agent.route_query(query)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Query routing error: {str(e)}")
+
+    chosen_path_str = str(routing.path).strip()
+    if payload.force_path and payload.force_path.lower() in ["b", "path_b"]:
+        is_path_a = False
+    else:
+        is_path_a = chosen_path_str.upper() == "A" or chosen_path_str.lower() == "path_a"
+
+    if is_path_a:
+        # Execute Path A: Journal Query via generated read-only SQL
+        result = ask_agent.generate_and_execute_sql(query)
+        if not result["success"]:
+            return {
+                "path": "path_a",
+                "path_label": "Path A: Journal Database Query",
+                "success": False,
+                "error": result.get("error"),
+                "sql_query": result.get("sql"),
+                "explanation": result.get("explanation"),
+                "answer": f"**Query Refused or Execution Error**: {result.get('error')}",
+                "rows": [],
+                "columns": [],
+                "row_count": 0,
+                "can_research_instead": True,
+                "suggested_query": query,
+                "detected_wine": routing.detected_wine.model_dump() if routing.detected_wine else None
+            }
+
+        return {
+            "path": "path_a",
+            "path_label": "Path A: Journal Database Query",
+            "success": True,
+            "sql_query": result.get("sql"),
+            "explanation": result.get("explanation"),
+            "columns": result.get("columns", []),
+            "rows": result.get("rows", []),
+            "row_count": result.get("row_count", 0),
+            "is_empty": result.get("is_empty", False),
+            "answer": result.get("answer"),
+            "can_research_instead": result.get("row_count", 0) == 0,
+            "suggested_query": query,
+            "detected_wine": routing.detected_wine.model_dump() if routing.detected_wine else None
+        }
+
+    else:
+        # Execute Path B: Deep Research Query (search grounded)
+        try:
+            res = await ask_agent.execute_research_query(
+                user_query=query,
+                wine_in_journal=routing.wine_in_journal,
+                detected_wine=routing.detected_wine
+            )
+            return {
+                "path": "path_b",
+                "path_label": res.get("path_label", "Path B: Deep Research Query"),
+                "success": True,
+                "is_general_education": res.get("is_general_education", False),
+                "is_specific_wine": res.get("is_specific_wine", False),
+                "wine_in_journal": res.get("wine_in_journal", False),
+                "answer": res.get("answer"),
+                "sources": res.get("sources", []),
+                "can_save_to_journal": res.get("can_save_to_journal", False),
+                "wine_candidate": res.get("wine_candidate")
+            }
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Research failed: {str(e)}")
+
+
+@app.post("/api/ask/save-proposal")
+async def save_proposal_from_research_endpoint(payload: SaveProposalRequest):
+    """
+    Path C: Converts research on a wine into a pending DossierProposal
+    with provenance='ask_and_research' and returns proposal comparison for human review.
+    """
+    try:
+        result = ask_agent.create_proposal_from_research(
+            producer_name=payload.producer,
+            wine_name=payload.wine_name,
+            vintage_year=payload.vintage,
+            dossier_markdown=payload.dossier_markdown,
+            sources=payload.sources
+        )
+        return {
+            "status": "success",
+            "proposal_id": result["proposal_id"],
+            "vintage_id": result["vintage_id"],
+            "proposal": result
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create proposal from research: {str(e)}")
 
 
 # ---------------------------------------------------------------------------

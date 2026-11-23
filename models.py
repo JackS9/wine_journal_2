@@ -199,6 +199,7 @@ class ResearchCorpus(Base):
     winemaking_tech_sheet_md: Mapped[Optional[str]] = mapped_column(Text)
     full_research_markdown: Mapped[str] = mapped_column(Text, nullable=False)
     sources_json: Mapped[Optional[List[str]]] = mapped_column(JSON)
+    provenance: Mapped[Optional[str]] = mapped_column(String(50), default="label_scan")
     last_researched_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
 
     vintage: Mapped["Vintage"] = relationship("Vintage", back_populates="research_corpus")
@@ -235,6 +236,7 @@ class JournalEntry(Base):
     label_photo_path: Mapped[Optional[str]] = mapped_column(String(500))
     personal_rating: Mapped[Optional[float]] = mapped_column(Float)  # e.g., 1.0 to 10.0 or 100-pt
     user_notes: Mapped[Optional[str]] = mapped_column(Text)
+    provenance: Mapped[Optional[str]] = mapped_column(String(50), default="label_scan")
 
     vintage: Mapped["Vintage"] = relationship("Vintage", back_populates="journal_entries")
     tasting_profile: Mapped[Optional["TastingProfile"]] = relationship("TastingProfile", uselist=False, back_populates="journal_entry", cascade="all, delete-orphan")
